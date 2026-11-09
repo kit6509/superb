@@ -203,14 +203,10 @@
   import {
     getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-  import {
-    getStorage, ref, uploadBytes, getDownloadURL
-  } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js";
 
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
-  const storage = getStorage(app);
 
   const $ = (id) => document.getElementById(id);
   const state = { user: null, problems: [], listType: "bouldering", holds: [], wallImageUrl: "", wallFile: null };
@@ -339,6 +335,59 @@
     return map[error.code] || `인증 오류: ${error.message}`;
   }
 
+  // 사진은 Firebase Storage 대신 압축한 JPEG 데이터로 Firestore에 함께 저장합니다.
+  // Firestore 문서 크기 제한(1MiB)을 넘지 않도록 이미지 데이터는 600KiB 이하로 맞춥니다.
+  async function compressWallImage(file) {
+    const bitmap = await createImageBitmap(file);
+    let width = bitmap.width;
+    let height = bitmap.height;
+    const maxDimension = 1280;
+
+    if (Math.max(width, height) > maxDimension) {
+      const scale = maxDimension / Math.max(width, height);
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
+    }
+
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("사진을 처리할 수 없습니다.");
+
+    const targetBytes = 600 * 1024;
+    let result = null;
+
+    for (let resizeAttempt = 0; resizeAttempt < 5; resizeAttempt++) {
+      canvas.width = width;
+      canvas.height = height;
+      context.clearRect(0, 0, width, height);
+      context.drawImage(bitmap, 0, 0, width, height);
+
+      for (const quality of [0.82, 0.74, 0.66, 0.58, 0.50, 0.42]) {
+        const blob = await new Promise(resolve =>
+          canvas.toBlob(resolve, "image/jpeg", quality)
+        );
+        if (!blob) throw new Error("사진 압축에 실패했습니다.");
+
+        if (blob.size <= targetBytes) {
+          result = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error("사진 데이터를 읽지 못했습니다."));
+            reader.readAsDataURL(blob);
+          });
+          bitmap.close();
+          return result;
+        }
+      }
+
+      width = Math.round(width * 0.8);
+      height = Math.round(height * 0.8);
+    }
+
+    bitmap.close();
+    throw new Error("사진 용량을 줄이지 못했습니다. 더 작은 사진을 선택해 주세요.");
+  }
+
   $("saveBtn").addEventListener("click", async () => {
     if (!state.user) { setMessage("saveMessage", "로그인 후 이용해 주세요.", "error"); return; }
     const name = $("problemName").value.trim();
@@ -346,27 +395,34 @@
     const grade = $("problemGrade").value;
     if (!name) { setMessage("saveMessage", "문제 이름을 입력해 주세요.", "error"); $("problemName").focus(); return; }
     if (!state.holds.length) { setMessage("saveMessage", "홀드 위치를 한 개 이상 찍어 주세요.", "error"); return; }
-    const btn = $("saveBtn"); btn.disabled = true; btn.textContent = "저장 중…";
+    const btn = $("saveBtn"); btn.disabled = true; btn.textContent = "저장 준비 중…";
     try {
-      let imageUrl = "";
+      let imageDataUrl = "";
       if (state.wallFile) {
-        const safeName = state.wallFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-        const imageRef = ref(storage, `problem-walls/${state.user.uid}/${Date.now()}-${safeName}`);
-        await uploadBytes(imageRef, state.wallFile);
-        imageUrl = await getDownloadURL(imageRef);
+        setMessage("saveMessage", "사진 용량을 줄이는 중입니다…");
+        imageDataUrl = await compressWallImage(state.wallFile);
       }
+
+      btn.textContent = "Firestore 저장 중…";
+      setMessage("saveMessage", "문제 정보를 저장하고 있습니다…");
       await addDoc(problemsRef, {
         name, type, grade, holds: state.holds.map(h => ({ x: h.x, y: h.y })),
-        ownerUid: state.user.uid, createdAt: serverTimestamp(), imageUrl
+        ownerUid: state.user.uid, createdAt: serverTimestamp(),
+        imageDataUrl, imageUrl: ""
       });
+
       setMessage("saveMessage", "문제가 저장되었습니다. 문제 보기에서 확인할 수 있습니다.", "success");
       $("problemName").value = ""; state.holds = []; state.wallFile = null; state.wallImageUrl = "";
       $("wallFile").value = ""; setWallImage($("editorWall"), ""); renderHolds($("editorWall"), []); updateHoldCount();
       switchScreen("list");
     } catch (e) {
-      console.error(e);
-      setMessage("saveMessage", `저장에 실패했습니다: ${e.message}`, "error");
-    } finally { btn.disabled = false; btn.textContent = "문제 저장하기"; }
+      console.error("문제 저장 오류:", e);
+      const detail = e.code ? `${e.code}: ${e.message}` : e.message;
+      setMessage("saveMessage", `저장에 실패했습니다: ${detail}`, "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "문제 저장하기";
+    }
   });
 
   function renderProblemList() {
@@ -406,7 +462,7 @@
     const wall = $("detailWall");
     wall.innerHTML = "";
     const hint = document.createElement("div"); hint.className = "wall-hint"; hint.textContent = "문제의 홀드 위치"; wall.appendChild(hint);
-    setWallImage(wall, p.imageUrl || "");
+    setWallImage(wall, p.imageDataUrl || p.imageUrl || "");
     renderHolds(wall, p.holds || []);
     $("detailBackdrop").classList.remove("hidden");
   }
