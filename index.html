@@ -50,8 +50,14 @@
       background-size:24px 24px; touch-action:manipulation; }
     .wall.has-image { background-image:none; background-color:#dbe2ea; }
     .wall img.wall-image { width:100%; height:100%; object-fit:fill; display:block; pointer-events:none; }
-    .hold { position:absolute; width:var(--hold-size,22px); height:var(--hold-size,22px); border:3px solid #ff3030; border-radius:50%; background:rgba(255,48,48,.22); transform:translate(-50%,-50%); box-shadow:0 0 0 1px rgba(255,255,255,.9),0 1px 6px rgba(0,0,0,.28); pointer-events:none; }
+    .hold { position:absolute; width:var(--hold-size,22px); height:var(--hold-size,22px); border:3px solid #ff3030; border-radius:50%; background:rgba(255,48,48,.22); transform:translate(-50%,-50%); box-shadow:0 0 0 1px rgba(255,255,255,.9),0 1px 6px rgba(0,0,0,.28); pointer-events:auto; cursor:pointer; padding:0; z-index:2; }
     .hold:after { content:""; position:absolute; inset:28%; border-radius:50%; background:rgba(255,48,48,.55); }
+    .hold.start { border-color:#16a34a; background:rgba(22,163,74,.24); }
+    .hold.start:after { background:rgba(22,163,74,.65); }
+    .hold.finish { border-color:#2563eb; background:rgba(37,99,235,.24); }
+    .hold.finish:after { background:rgba(37,99,235,.65); }
+    .hold.selected { outline:3px solid #f59e0b; outline-offset:3px; z-index:4; }
+    .hold-tools .role-control { flex:1 1 160px; }
     .hold-tools { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px; }
     .hold-tools .size-control { flex:1 1 180px; display:flex; align-items:center; gap:9px; font-size:13px; color:#394458; }
     .hold-tools input[type="range"] { min-height:28px; padding:0; accent-color:var(--primary); }
@@ -162,11 +168,15 @@
             <button id="eraseModeBtn" class="btn secondary" type="button" aria-pressed="false">지우개 모드: 꺼짐</button>
           </div>
           <div class="hold-tools">
+            <label class="role-control" for="holdRole">새 포인트 종류
+              <select id="holdRole"><option value="normal">일반 홀드</option><option value="start">스타트 홀드</option><option value="finish">완등 홀드</option></select>
+            </label>
             <label class="size-control" for="holdSize">
-              포인트 크기 <strong id="holdSizeValue">22px</strong>
-              <input id="holdSize" type="range" min="12" max="44" step="2" value="22" />
+              <span id="holdSizeLabel">새 포인트 크기</span> <strong id="holdSizeValue">22px</strong>
+              <input id="holdSize" type="range" min="10" max="60" step="2" value="22" />
             </label>
           </div>
+          <p class="muted">스타트는 초록색, 완등은 파란색, 일반 홀드는 빨간색입니다. 이미 찍은 포인트를 눌러 선택하면 해당 포인트만 크기를 조절할 수 있습니다.</p>
           <p class="muted">현재 홀드 <strong id="holdCount">0</strong>개 · 지우개 모드에서는 벽을 눌러 가까운 홀드를 삭제할 수 있습니다.</p>
         </div>
         <div class="field">
@@ -217,7 +227,7 @@
     signOut
   } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
   import {
-    getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp
+    getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
   const app = initializeApp(firebaseConfig);
@@ -226,7 +236,7 @@
 
   const $ = (id) => document.getElementById(id);
   const ADMIN_EMAIL = "kit6509@naver.com";
-  const state = { user: null, isAdmin: false, problems: [], listType: "bouldering", holds: [], wallImageUrl: "", wallFile: null, holdSize: 22, eraseMode: false };
+  const state = { user: null, isAdmin: false, problems: [], listType: "bouldering", holds: [], wallImageUrl: "", wallFile: null, holdSize: 22, eraseMode: false, selectedHoldIndex: -1, newHoldRole: "normal" };
   const problemsRef = collection(db, "problems");
 
   function grades(type) {
@@ -250,23 +260,43 @@
     fillGradeSelect($("problemGrade"), $("problemType").value);
     fillGradeSelect($("gradeFilter"), state.listType, true);
   }
-  function renderHolds(wall, holds) {
+  function renderHolds(wall, holds, editable = false) {
     wall.querySelectorAll(".hold").forEach(node => node.remove());
-    holds.forEach(({x,y}) => {
-      const dot = document.createElement("span");
-      dot.className = "hold"; dot.style.left = `${x * 100}%`; dot.style.top = `${y * 100}%`;
-      dot.style.setProperty("--hold-size", `${state.holdSize}px`);
+    holds.forEach((hold, index) => {
+      const { x, y } = hold;
+      const dot = document.createElement("button");
+      dot.type = "button";
+      dot.className = `hold ${hold.role || "normal"}${editable && index === state.selectedHoldIndex ? " selected" : ""}`;
+      dot.style.left = `${x * 100}%`; dot.style.top = `${y * 100}%`;
+      dot.style.setProperty("--hold-size", `${hold.size || 22}px`);
+      dot.setAttribute("aria-label", `${hold.role === "start" ? "스타트" : hold.role === "finish" ? "완등" : "일반"} 홀드 ${index + 1}`);
+      if (editable) dot.addEventListener("click", event => {
+        event.stopPropagation();
+        if (state.eraseMode) {
+          state.holds.splice(index, 1);
+          state.selectedHoldIndex = -1;
+          renderHolds($("editorWall"), state.holds, true); updateHoldCount(); updateHoldTools();
+        } else {
+          state.selectedHoldIndex = index;
+          state.holdSize = hold.size || 22;
+          $("holdRole").value = hold.role || "normal";
+          updateHoldTools();
+        }
+      });
       wall.appendChild(dot);
     });
   }
   function updateHoldCount() { $("holdCount").textContent = String(state.holds.length); }
   function updateHoldTools() {
+    const selected = state.selectedHoldIndex >= 0 ? state.holds[state.selectedHoldIndex] : null;
+    $("holdSizeLabel").textContent = selected ? "선택 포인트 크기" : "새 포인트 크기";
     $("holdSizeValue").textContent = `${state.holdSize}px`;
     $("holdSize").value = String(state.holdSize);
+    $("holdRole").value = selected ? (selected.role || "normal") : state.newHoldRole;
     $("eraseModeBtn").classList.toggle("active-tool", state.eraseMode);
     $("eraseModeBtn").setAttribute("aria-pressed", String(state.eraseMode));
     $("eraseModeBtn").textContent = state.eraseMode ? "지우개 모드: 켜짐" : "지우개 모드: 꺼짐";
-    renderHolds($("editorWall"), state.holds);
+    renderHolds($("editorWall"), state.holds, true);
   }
   function setWallImage(wall, url) {
     wall.querySelectorAll("img.wall-image").forEach(n => n.remove());
@@ -310,31 +340,26 @@
   });
 
   $("editorWall").addEventListener("click", (event) => {
-    if (!state.user) return;
+    if (!state.isAdmin || state.eraseMode) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
     const y = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
-
-    if (state.eraseMode) {
-      let nearestIndex = -1;
-      let nearestDistance = Infinity;
-      state.holds.forEach((h, i) => {
-        const distance = Math.hypot((h.x - x) * rect.width, (h.y - y) * rect.height);
-        if (distance < nearestDistance) { nearestDistance = distance; nearestIndex = i; }
-      });
-      if (nearestIndex >= 0 && nearestDistance <= Math.max(28, state.holdSize * 1.2)) {
-        state.holds.splice(nearestIndex, 1);
-      }
-    } else {
-      const threshold = Math.max(0.018, state.holdSize / Math.min(rect.width, rect.height) * 0.7);
-      const index = state.holds.findIndex(h => Math.hypot(h.x - x, h.y - y) < threshold);
-      if (index >= 0) state.holds.splice(index, 1);
-      else state.holds.push({ x: Number(x.toFixed(5)), y: Number(y.toFixed(5)) });
-    }
-    renderHolds($("editorWall"), state.holds); updateHoldCount();
+    state.holds.push({ x: Number(x.toFixed(5)), y: Number(y.toFixed(5)), role: state.newHoldRole, size: state.holdSize });
+    state.selectedHoldIndex = state.holds.length - 1;
+    renderHolds($("editorWall"), state.holds, true); updateHoldCount(); updateHoldTools();
   });
-  $("holdSize").addEventListener("input", (event) => {
+  $("holdRole").addEventListener("change", event => {
+    const role = event.target.value;
+    if (state.selectedHoldIndex >= 0 && state.holds[state.selectedHoldIndex]) {
+      state.holds[state.selectedHoldIndex].role = role;
+      updateHoldTools();
+    } else state.newHoldRole = role;
+  });
+  $("holdSize").addEventListener("input", event => {
     state.holdSize = Number(event.target.value);
+    if (state.selectedHoldIndex >= 0 && state.holds[state.selectedHoldIndex]) {
+      state.holds[state.selectedHoldIndex].size = state.holdSize;
+    }
     updateHoldTools();
   });
   $("eraseModeBtn").addEventListener("click", () => {
@@ -342,10 +367,10 @@
     updateHoldTools();
   });
   $("undoHoldBtn").addEventListener("click", () => {
-    state.holds.pop(); renderHolds($("editorWall"), state.holds); updateHoldCount();
+    state.holds.pop(); state.selectedHoldIndex = -1; updateHoldTools(); updateHoldCount();
   });
   $("clearHoldsBtn").addEventListener("click", () => {
-    state.holds = []; renderHolds($("editorWall"), state.holds); updateHoldCount();
+    state.holds = []; state.selectedHoldIndex = -1; updateHoldTools(); updateHoldCount();
   });
   $("wallFile").addEventListener("change", (event) => {
     const file = event.target.files?.[0];
@@ -458,14 +483,14 @@
       btn.textContent = "Firestore 저장 중…";
       setMessage("saveMessage", "문제 정보를 저장하고 있습니다…");
       await addDoc(problemsRef, {
-        name, type, grade, holds: state.holds.map(h => ({ x: h.x, y: h.y })),
+        name, type, grade, holds: state.holds.map(h => ({ x: h.x, y: h.y, role: h.role || "normal", size: h.size || 22 })),
         ownerUid: state.user.uid, createdAt: serverTimestamp(),
         imageDataUrl, imageUrl: ""
       });
 
       setMessage("saveMessage", "문제가 저장되었습니다. 문제 보기에서 확인할 수 있습니다.", "success");
-      $("problemName").value = ""; state.holds = []; state.wallFile = null; state.wallImageUrl = "";
-      $("wallFile").value = ""; setWallImage($("editorWall"), ""); renderHolds($("editorWall"), []); updateHoldCount();
+      $("problemName").value = ""; state.holds = []; state.selectedHoldIndex = -1; state.newHoldRole = "normal"; state.holdSize = 22; state.wallFile = null; state.wallImageUrl = "";
+      $("wallFile").value = ""; $("holdRole").value = "normal"; setWallImage($("editorWall"), ""); updateHoldTools(); updateHoldCount();
       switchScreen("list");
     } catch (e) {
       console.error("문제 저장 오류:", e);
@@ -494,13 +519,25 @@
       <article class="problem-card" data-id="${escapeHtml(p.id)}" tabindex="0" role="button" aria-label="${escapeHtml(p.name)} 상세 보기">
         <div><div class="problem-name">${escapeHtml(p.name || "이름 없는 문제")}</div>
         <div class="problem-meta">${typeName(p.type)} · 홀드 ${(p.holds || []).length}개</div></div>
-        <div class="grade">${escapeHtml(p.grade || "-")}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex:none;">
+          <div class="grade">${escapeHtml(p.grade || "-")}</div>
+          ${state.isAdmin ? `<button class="btn danger delete-problem" type="button" data-delete-id="${escapeHtml(p.id)}" style="min-height:34px;padding:6px 10px;">삭제</button>` : ""}
+        </div>
       </article>`).join("");
     list.querySelectorAll(".problem-card").forEach(card => {
       const open = () => showDetail(card.dataset.id);
-      card.addEventListener("click", open);
-      card.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") open(); });
+      card.addEventListener("click", event => { if (!event.target.closest(".delete-problem")) open(); });
+      card.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && !e.target.closest(".delete-problem")) { e.preventDefault(); open(); } });
     });
+    list.querySelectorAll(".delete-problem").forEach(button => button.addEventListener("click", async event => {
+      event.stopPropagation();
+      if (!state.isAdmin) return;
+      const problem = state.problems.find(item => item.id === button.dataset.deleteId);
+      if (!problem || !confirm(`'${problem.name || "이 문제"}'을(를) 삭제할까요? 삭제 후 복구할 수 없습니다.`)) return;
+      button.disabled = true; button.textContent = "삭제 중…";
+      try { await deleteDoc(doc(db, "problems", problem.id)); }
+      catch (error) { alert(`삭제에 실패했습니다: ${error.message}`); button.disabled = false; button.textContent = "삭제"; }
+    }));
   }
   $("gradeFilter").addEventListener("change", renderProblemList);
   $("searchInput").addEventListener("input", renderProblemList);
@@ -515,7 +552,7 @@
     wall.innerHTML = "";
     const hint = document.createElement("div"); hint.className = "wall-hint"; hint.textContent = "문제의 홀드 위치"; wall.appendChild(hint);
     setWallImage(wall, p.imageDataUrl || p.imageUrl || "");
-    renderHolds(wall, p.holds || []);
+    renderHolds(wall, p.holds || [], false);
     $("detailBackdrop").classList.remove("hidden");
   }
   $("closeDetail").addEventListener("click", () => $("detailBackdrop").classList.add("hidden"));
@@ -540,6 +577,7 @@
 
   updateGradeControls();
   updateHoldTools();
+  updateHoldCount();
   renderAuth();
 </script>
 </body>
