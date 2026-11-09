@@ -21,6 +21,8 @@
     .brand h1 { font-size:20px; margin:0; letter-spacing:-.5px; }
     .brand p { margin:5px 0 0; color:#cbd5e1; font-size:12px; }
     .auth-status { color:#dbeafe; font-size:12px; text-align:right; }
+    .header-actions { display:flex; flex-direction:column; align-items:flex-end; gap:7px; }
+    .mini-login { border:1px solid #64748b; border-radius:8px; padding:5px 8px; background:#263244; color:#e2e8f0; font-size:10px; font-weight:600; white-space:nowrap; }
     .nav { display:flex; gap:8px; padding:14px 16px 0; background:#111827; }
     .nav button { flex:1; border:0; border-radius:12px 12px 0 0; padding:13px 8px; color:#cbd5e1; background:#263244; font-weight:700; }
     .nav button.admin-login-tab { flex:0 0 auto; padding:8px 12px; margin-left:auto; font-size:11px; border-radius:9px 9px 0 0; opacity:.9; }
@@ -94,12 +96,15 @@
         <h1>🧗 스프레이월 문제집</h1>
         <p>홀드를 찍고, 나만의 클라이밍 문제를 공유하세요.</p>
       </div>
-      <div class="auth-status" id="authStatus">로그인 확인 중…</div>
+      <div class="header-actions">
+        <div class="auth-status" id="authStatus">로그인 확인 중…</div>
+        <button id="adminLoginBtn" class="mini-login" type="button">관리자 로그인</button>
+      </div>
     </div>
   </header>
   <nav class="nav">
     <button id="navList" class="active" type="button">문제 보기</button>
-    <button id="navCreate" class="admin-login-tab" type="button">관리자 로그인</button>
+    <button id="navCreate" class="hidden" type="button">관리자 페이지</button>
   </nav>
 
   <main>
@@ -139,7 +144,7 @@
 
       <div id="editorPanel" class="panel hidden">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-          <h2 class="section-title" style="margin:0;">새 문제 만들기</h2>
+          <h2 class="section-title" style="margin:0;">관리자 페이지 · 새 문제 만들기</h2>
           <button id="logoutBtn" class="btn secondary" type="button" style="min-height:36px;padding:8px 12px;">로그아웃</button>
         </div>
         <div class="field">
@@ -282,12 +287,18 @@
   }
   function renderAuth() {
     const loggedInAdmin = Boolean(state.user && state.isAdmin);
-    $("authStatus").textContent = loggedInAdmin ? "관리자" : "게스트";
+    $("authStatus").textContent = loggedInAdmin ? "관리자 로그인됨" : "게스트";
+    $("adminLoginBtn").classList.toggle("hidden", loggedInAdmin);
+    $("navCreate").classList.toggle("hidden", !loggedInAdmin);
     $("loginPanel").classList.toggle("hidden", loggedInAdmin);
     $("editorPanel").classList.toggle("hidden", !loggedInAdmin);
+    if (!loggedInAdmin && !$("listScreen").classList.contains("hidden")) {
+      $("navCreate").classList.remove("active");
+    }
   }
 
   $("navList").addEventListener("click", () => switchScreen("list"));
+  $("adminLoginBtn").addEventListener("click", () => switchScreen("create"));
   $("navCreate").addEventListener("click", () => switchScreen("create"));
   $("problemType").addEventListener("change", updateGradeControls);
   document.querySelectorAll("[data-list-type]").forEach(button => {
@@ -516,6 +527,7 @@
     state.isAdmin = Boolean(user && (user.email || "").toLowerCase() === ADMIN_EMAIL);
     renderAuth();
     if (user && !state.isAdmin) signOut(auth);
+    if (!state.isAdmin) switchScreen("list");
   });
   // 모든 방문자에게 공개된 문제 목록을 실시간으로 구독합니다.
   onSnapshot(query(problemsRef, orderBy("createdAt", "desc")), snapshot => {
