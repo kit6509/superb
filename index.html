@@ -49,7 +49,10 @@
       background-image:linear-gradient(#dce3ed 1px,transparent 1px),linear-gradient(90deg,#dce3ed 1px,transparent 1px);
       background-size:24px 24px; touch-action:manipulation; }
     .wall.has-image { background-image:none; background-color:#dbe2ea; }
-    .wall img.wall-image { width:100%; height:100%; object-fit:fill; display:block; pointer-events:none; filter:brightness(.8) saturate(.7); }
+    .wall img.wall-image { width:100%; height:100%; object-fit:fill; display:block; pointer-events:none; filter:brightness(.8) saturate(var(--photo-sat, .7)); opacity:var(--photo-opacity, 1); }
+    .photo-tools { display:none; flex-direction:column; gap:8px; margin-top:10px; }
+    #editorWall.has-image + .photo-tools { display:flex; }
+    .wall.original-photo img.wall-image { filter:none; }
     .hold { position:absolute; width:var(--hold-size,22px); height:var(--hold-size,22px); border:3px solid transparent; border-radius:50%; background:rgba(147,197,253,.6); transform:translate(-50%,-50%); box-shadow:0 0 0 2px rgba(255,255,255,.95),0 1px 6px rgba(0,0,0,.28); pointer-events:auto; cursor:pointer; padding:0; z-index:2; touch-action:none; }
     .hold.start { background:rgba(134,239,172,.6); }
     .hold.finish { background:rgba(252,165,165,.6); }
@@ -159,6 +162,16 @@
         <div class="wall-wrap">
           <div id="editorWall" class="wall" aria-label="홀드 위치 선택 영역">
           </div>
+          <div class="photo-tools">
+            <label class="size-control" for="photoSat">
+              <span>사진 채도</span> <strong id="photoSatValue">70%</strong>
+              <input id="photoSat" type="range" min="0" max="100" step="5" value="70" />
+            </label>
+            <label class="size-control" for="photoTransparency">
+              <span>사진 투명도</span> <strong id="photoTransparencyValue">0%</strong>
+              <input id="photoTransparency" type="range" min="0" max="90" step="5" value="0" />
+            </label>
+          </div>
           <div class="toolbar">
             <button id="undoHoldBtn" class="btn secondary" type="button">마지막 홀드 취소</button>
             <button id="clearHoldsBtn" class="btn danger" type="button">홀드 전체 삭제</button>
@@ -202,8 +215,8 @@
       <div><h2 id="detailTitle">문제 상세</h2><div id="detailMeta" class="muted"></div></div>
       <button id="closeDetail" class="close" type="button" aria-label="닫기">×</button>
     </div>
+    <button id="detailOriginalBtn" class="btn secondary" type="button" style="margin-bottom:10px;" aria-pressed="false">사진 원본보기</button>
     <div id="detailWall" class="wall"></div>
-    <p id="detailOwner" class="small" style="margin-top:12px;"></p>
   </div>
 </div>
 
@@ -409,6 +422,20 @@
     } else state.newHoldRole = role;
   };
   ["input", "change"].forEach(type => $("holdRole").addEventListener(type, onHoldRoleChange));
+  // 관리자 편집 화면의 사진 채도/투명도 조절. 값은 편집 벽 요소의 CSS 변수로 전달합니다.
+  function applyPhotoStyle() {
+    const sat = Number($("photoSat").value);
+    const transparency = Number($("photoTransparency").value);
+    $("photoSatValue").textContent = `${sat}%`;
+    $("photoTransparencyValue").textContent = `${transparency}%`;
+    $("editorWall").style.setProperty("--photo-sat", String(sat / 100));
+    $("editorWall").style.setProperty("--photo-opacity", String(1 - transparency / 100));
+  }
+  ["input", "change"].forEach(type => {
+    $("photoSat").addEventListener(type, applyPhotoStyle);
+    $("photoTransparency").addEventListener(type, applyPhotoStyle);
+  });
+  applyPhotoStyle();
   $("holdSize").addEventListener("input", event => {
     state.holdSize = Number(event.target.value);
     const index = state.selectedHoldIndex;
@@ -702,9 +729,12 @@
     state.detailId = id;
     $("detailTitle").textContent = p.name || "이름 없는 문제";
     $("detailMeta").textContent = `${typeName(p.type)} · ${p.grade || "-"} · 홀드 ${(p.holds || []).length}개`;
-    $("detailOwner").textContent = `작성자 UID: ${p.ownerUid || "정보 없음"}`;
     const wall = $("detailWall");
     wall.innerHTML = "";
+    // 상세를 열 때마다 기본 화면(어둡게 보기)으로 되돌립니다.
+    wall.classList.remove("original-photo");
+    $("detailOriginalBtn").textContent = "사진 원본보기";
+    $("detailOriginalBtn").setAttribute("aria-pressed", "false");
     setWallImage(wall, p.imageDataUrl || p.imageUrl || "");
     renderHolds(wall, p.holds || [], false, p.type === "endurance");
     $("detailBackdrop").classList.remove("hidden");
@@ -718,6 +748,13 @@
       }
     }
   }
+  // 사진을 원래 색으로 보여줍니다. 홀드 표시는 그대로 둡니다.
+  $("detailOriginalBtn").addEventListener("click", () => {
+    const btn = $("detailOriginalBtn");
+    const on = $("detailWall").classList.toggle("original-photo");
+    btn.textContent = on ? "기본 화면으로" : "사진 원본보기";
+    btn.setAttribute("aria-pressed", String(on));
+  });
   $("closeDetail").addEventListener("click", () => $("detailBackdrop").classList.add("hidden"));
   $("detailBackdrop").addEventListener("click", e => { if (e.target === $("detailBackdrop")) $("detailBackdrop").classList.add("hidden"); });
   document.addEventListener("keydown", e => { if (e.key === "Escape") $("detailBackdrop").classList.add("hidden"); });
