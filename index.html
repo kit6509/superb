@@ -49,20 +49,17 @@
       background-image:linear-gradient(#dce3ed 1px,transparent 1px),linear-gradient(90deg,#dce3ed 1px,transparent 1px);
       background-size:24px 24px; touch-action:manipulation; }
     .wall.has-image { background-image:none; background-color:#dbe2ea; }
-    .wall img.wall-image { width:100%; height:100%; object-fit:fill; display:block; pointer-events:none; }
-    .hold { position:absolute; width:var(--hold-size,22px); height:var(--hold-size,22px); border:3px solid #ff3030; border-radius:50%; background:rgba(255,48,48,.22); transform:translate(-50%,-50%); box-shadow:0 0 0 1px rgba(255,255,255,.9),0 1px 6px rgba(0,0,0,.28); pointer-events:auto; cursor:pointer; padding:0; z-index:2; }
-    .hold:after { content:""; position:absolute; inset:28%; border-radius:50%; background:rgba(255,48,48,.55); }
-    .hold.start { border-color:#16a34a; background:rgba(22,163,74,.24); }
-    .hold.start:after { background:rgba(22,163,74,.65); }
-    .hold.finish { border-color:#2563eb; background:rgba(37,99,235,.24); }
-    .hold.finish:after { background:rgba(37,99,235,.65); }
+    .wall img.wall-image { width:100%; height:100%; object-fit:fill; display:block; pointer-events:none; filter:brightness(.8) saturate(.7); }
+    .hold { position:absolute; width:var(--hold-size,22px); height:var(--hold-size,22px); border:3px solid transparent; border-radius:50%; background:rgba(147,197,253,.6); transform:translate(-50%,-50%); box-shadow:0 0 0 2px rgba(255,255,255,.95),0 1px 6px rgba(0,0,0,.28); pointer-events:auto; cursor:pointer; padding:0; z-index:2; touch-action:none; }
+    .hold.start { background:rgba(134,239,172,.6); }
+    .hold.finish { background:rgba(252,165,165,.6); }
     .hold.selected { outline:3px solid #f59e0b; outline-offset:3px; z-index:4; }
+    .hold-no { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font:700 calc(var(--hold-size,22px) * .5)/1 system-ui,sans-serif; color:#0f172a; text-shadow:0 0 2px rgba(255,255,255,.9); pointer-events:none; }
     .hold-tools .role-control { flex:1 1 160px; }
     .hold-tools { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px; }
     .hold-tools .size-control { flex:1 1 180px; display:flex; align-items:center; gap:9px; font-size:13px; color:#394458; }
     .hold-tools input[type="range"] { min-height:28px; padding:0; accent-color:var(--primary); }
     .btn.active-tool { background:#fee2e2; color:#991b1b; outline:2px solid #ef4444; }
-    .wall-hint { position:absolute; left:10px; right:10px; bottom:10px; text-align:center; color:#475569; background:rgba(255,255,255,.88); border-radius:9px; padding:7px; font-size:12px; pointer-events:none; }
     .toolbar { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
     .toolbar .btn { flex:1; min-width:120px; }
     .filters { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
@@ -71,7 +68,8 @@
     .type-tabs button { flex:1; padding:11px; border:1px solid var(--line); border-radius:11px; background:white; color:#475569; font-weight:800; }
     .type-tabs button.active { border-color:var(--primary); background:var(--soft); color:var(--primary); }
     .problem-list { display:flex; flex-direction:column; gap:9px; }
-    .problem-card { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px; border:1px solid var(--line); border-radius:14px; background:white; cursor:pointer; }
+    .problem-card { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; padding:14px; border:1px solid var(--line); border-radius:14px; background:white; cursor:pointer; }
+    .problem-actions { display:flex; gap:8px; width:100%; justify-content:flex-end; }
     .problem-card:active { background:#f8fafc; }
     .problem-name { font-weight:800; overflow-wrap:anywhere; }
     .problem-meta { margin-top:5px; color:var(--muted); font-size:12px; }
@@ -140,7 +138,7 @@
       <div id="loginPanel" class="panel">
         <h2 class="section-title">관리자 로그인</h2>
         <p class="muted">문제 등록 및 관리는 관리자 계정만 사용할 수 있습니다.</p>
-        <div class="field"><label for="email">이메일</label><input id="email" type="email" autocomplete="email" placeholder="관리자 이메일" value="kit6509@naver.com" /></div>
+        <div class="field"><label for="email">이메일</label><input id="email" type="email" autocomplete="email" placeholder="관리자 이메일" /></div>
         <div class="field"><label for="password">비밀번호</label><input id="password" type="password" autocomplete="current-password" placeholder="비밀번호 (6자 이상)" /></div>
         <div class="row">
           <button id="loginBtn" class="btn" type="button">관리자 로그인</button>
@@ -160,7 +158,6 @@
         </div>
         <div class="wall-wrap">
           <div id="editorWall" class="wall" aria-label="홀드 위치 선택 영역">
-            <div class="wall-hint">벽을 탭해 홀드를 추가하세요</div>
           </div>
           <div class="toolbar">
             <button id="undoHoldBtn" class="btn secondary" type="button">마지막 홀드 취소</button>
@@ -192,6 +189,7 @@
           <select id="problemGrade"></select>
         </div>
         <button id="saveBtn" class="btn full" type="button">문제 저장하기</button>
+        <button id="cancelEditBtn" class="btn secondary full hidden" type="button" style="margin-top:8px;">수정 취소</button>
         <div id="saveMessage" class="message" aria-live="polite"></div>
       </div>
     </section>
@@ -227,7 +225,7 @@
     signOut
   } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
   import {
-    getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp
+    getFirestore, collection, addDoc, setDoc, getDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
   const app = initializeApp(firebaseConfig);
@@ -236,7 +234,11 @@
 
   const $ = (id) => document.getElementById(id);
   const ADMIN_EMAIL = "kit6509@naver.com";
-  const state = { user: null, isAdmin: false, problems: [], listType: "bouldering", holds: [], wallImageUrl: "", wallFile: null, holdSize: 22, eraseMode: false, selectedHoldIndex: -1, newHoldRole: "normal" };
+  let holdDrag = null;        // 홀드 드래그 상태 { index, pointerId, moved }
+  let ignoreHoldClick = false; // 드래그 직후 발생하는 click 무시용
+  let openActionId = "";       // 목록에서 '수정'을 눌러 펼친 문제 id
+  let editingProblem = null;   // 문제변경 중이면 원본 문제 정보, 아니면 null
+  const state = { user: null, isAdmin: false, problems: [], listType: "bouldering", holds: [], previewUrl: "", detailId: "", wallFile: null, holdSize: 22, eraseMode: false, selectedHoldIndex: -1, newHoldRole: "normal" };
   const problemsRef = collection(db, "problems");
 
   function grades(type) {
@@ -256,12 +258,20 @@
     select.innerHTML = (includeAll ? '<option value="">전체 등급</option>' : "") +
       values.map(g => `<option value="${g}">${g}</option>`).join("");
   }
-  function updateGradeControls() {
+  function updateEditorGrades() {
     fillGradeSelect($("problemGrade"), $("problemType").value);
+  }
+  function updateFilterGrades() {
     fillGradeSelect($("gradeFilter"), state.listType, true);
   }
-  function renderHolds(wall, holds, editable = false) {
+  function clearWallPreview() {
+    if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+    state.previewUrl = "";
+  }
+  // 지구력 문제는 일반 홀드에만 잡는 순서(1, 2, 3…) 번호를 홀드 안쪽에 표시합니다. 스타트/완등 홀드는 번호를 붙이지 않습니다.
+  function renderHolds(wall, holds, editable = false, numbered = editable && $("problemType").value === "endurance") {
     wall.querySelectorAll(".hold").forEach(node => node.remove());
+    let sequence = 0;
     holds.forEach((hold, index) => {
       const { x, y } = hold;
       const dot = document.createElement("button");
@@ -270,12 +280,45 @@
       dot.style.left = `${x * 100}%`; dot.style.top = `${y * 100}%`;
       dot.style.setProperty("--hold-size", `${hold.size || 22}px`);
       dot.setAttribute("aria-label", `${hold.role === "start" ? "스타트" : hold.role === "finish" ? "완등" : "일반"} 홀드 ${index + 1}`);
+      if (editable) {
+        // 선택된 홀드를 누른 채 드래그하면 위치를 옮깁니다.
+        dot.addEventListener("pointerdown", event => {
+          if (state.eraseMode || index !== state.selectedHoldIndex) return;
+          event.stopPropagation();
+          ignoreHoldClick = false;
+          holdDrag = { index, pointerId: event.pointerId, moved: false };
+          dot.setPointerCapture(event.pointerId);
+        });
+        dot.addEventListener("pointermove", event => {
+          if (!holdDrag || holdDrag.pointerId !== event.pointerId) return;
+          const rect = wall.getBoundingClientRect();
+          const target = state.holds[holdDrag.index];
+          target.x = Number(Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)).toFixed(5));
+          target.y = Number(Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)).toFixed(5));
+          holdDrag.moved = true;
+          dot.style.left = `${target.x * 100}%`; dot.style.top = `${target.y * 100}%`;
+        });
+        const endHoldDrag = event => {
+          if (!holdDrag || holdDrag.pointerId !== event.pointerId) return;
+          // 드래그 후 발생하는 click은 선택 취소로 처리되지 않도록 무시합니다.
+          ignoreHoldClick = holdDrag.moved;
+          holdDrag = null;
+          if (dot.hasPointerCapture(event.pointerId)) dot.releasePointerCapture(event.pointerId);
+        };
+        dot.addEventListener("pointerup", endHoldDrag);
+        dot.addEventListener("pointercancel", endHoldDrag);
+      }
       if (editable) dot.addEventListener("click", event => {
         event.stopPropagation();
+        if (ignoreHoldClick) { ignoreHoldClick = false; return; }
         if (state.eraseMode) {
           state.holds.splice(index, 1);
           state.selectedHoldIndex = -1;
           renderHolds($("editorWall"), state.holds, true); updateHoldCount(); updateHoldTools();
+        } else if (index === state.selectedHoldIndex) {
+          // 이미 선택된 홀드를 다시 누르면 선택을 취소합니다.
+          state.selectedHoldIndex = -1;
+          updateHoldTools();
         } else {
           state.selectedHoldIndex = index;
           state.holdSize = hold.size || 22;
@@ -283,6 +326,14 @@
           updateHoldTools();
         }
       });
+      const isNormal = (hold.role || "normal") === "normal";
+      if (isNormal) sequence += 1;
+      if (numbered && isNormal) {
+        const no = document.createElement("span");
+        no.className = "hold-no";
+        no.textContent = String(sequence);
+        dot.appendChild(no);
+      }
       wall.appendChild(dot);
     });
   }
@@ -330,12 +381,13 @@
   $("navList").addEventListener("click", () => switchScreen("list"));
   $("adminLoginBtn").addEventListener("click", () => switchScreen("create"));
   $("navCreate").addEventListener("click", () => switchScreen("create"));
-  $("problemType").addEventListener("change", updateGradeControls);
+  // 모바일에서는 select의 change가 picker의 '완료'를 눌러야 발생하므로 input 이벤트도 함께 받아 바로 반영합니다.
+  ["input", "change"].forEach(type => $("problemType").addEventListener(type, () => { updateEditorGrades(); updateHoldTools(); }));
   document.querySelectorAll("[data-list-type]").forEach(button => {
     button.addEventListener("click", () => {
       state.listType = button.dataset.listType;
       document.querySelectorAll("[data-list-type]").forEach(b => b.classList.toggle("active", b === button));
-      updateGradeControls(); renderProblemList();
+      updateFilterGrades(); renderProblemList();
     });
   });
 
@@ -345,22 +397,28 @@
     const x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
     const y = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
     state.holds.push({ x: Number(x.toFixed(5)), y: Number(y.toFixed(5)), role: state.newHoldRole, size: state.holdSize });
-    state.selectedHoldIndex = state.holds.length - 1;
+    // 새로 찍은 홀드는 선택 상태로 두지 않습니다. 기존 홀드를 직접 눌러야 선택(포인팅)됩니다.
+    state.selectedHoldIndex = -1;
     renderHolds($("editorWall"), state.holds, true); updateHoldCount(); updateHoldTools();
   });
-  $("holdRole").addEventListener("change", event => {
+  const onHoldRoleChange = event => {
     const role = event.target.value;
     if (state.selectedHoldIndex >= 0 && state.holds[state.selectedHoldIndex]) {
       state.holds[state.selectedHoldIndex].role = role;
       updateHoldTools();
     } else state.newHoldRole = role;
-  });
+  };
+  ["input", "change"].forEach(type => $("holdRole").addEventListener(type, onHoldRoleChange));
   $("holdSize").addEventListener("input", event => {
     state.holdSize = Number(event.target.value);
-    if (state.selectedHoldIndex >= 0 && state.holds[state.selectedHoldIndex]) {
-      state.holds[state.selectedHoldIndex].size = state.holdSize;
+    const index = state.selectedHoldIndex;
+    if (index >= 0 && state.holds[index]) {
+      state.holds[index].size = state.holdSize;
+      // 전체를 다시 그리지 않고, 선택한 홀드 하나의 크기만 바꿉니다.
+      const node = $("editorWall").querySelectorAll(".hold")[index];
+      if (node) node.style.setProperty("--hold-size", `${state.holdSize}px`);
     }
-    updateHoldTools();
+    $("holdSizeValue").textContent = `${state.holdSize}px`;
   });
   $("eraseModeBtn").addEventListener("click", () => {
     state.eraseMode = !state.eraseMode;
@@ -378,9 +436,10 @@
     if (!file.type.startsWith("image/")) { setMessage("saveMessage", "이미지 파일만 선택할 수 있습니다.", "error"); return; }
     if (file.size > 8 * 1024 * 1024) { setMessage("saveMessage", "이미지는 8MB 이하로 선택해 주세요.", "error"); event.target.value = ""; return; }
     state.wallFile = file;
-    const previewUrl = URL.createObjectURL(file);
-    setWallImage($("editorWall"), previewUrl);
-    renderHolds($("editorWall"), state.holds);
+    clearWallPreview();
+    state.previewUrl = URL.createObjectURL(file);
+    setWallImage($("editorWall"), state.previewUrl);
+    updateHoldTools();
   });
 
   $("loginBtn").addEventListener("click", async () => {
@@ -392,11 +451,13 @@
     }
     try {
       await signInWithEmailAndPassword(auth, email, $("password").value);
-      setMessage("authMessage", "관리자 로그인되었습니다.", "success");
+      // 모바일에서 로그인 직후 화면이 갱신되지 않는 문제를 피하려고, 로그인 성공 시 한 번만 새로고침합니다.
+      // (로그인 상태는 Firebase가 저장하므로 새로고침 후에도 유지되고, 이 코드는 다시 실행되지 않습니다.)
+      location.reload();
     } catch (e) { setMessage("authMessage", authError(e), "error"); }
   });
   $("logoutBtn").addEventListener("click", async () => {
-    try { await signOut(auth); state.holds = []; state.wallFile = null; state.wallImageUrl = ""; $("wallFile").value = ""; renderHolds($("editorWall"), []); updateHoldCount(); }
+    try { await signOut(auth); resetEditor(); }
     catch (e) { setMessage("saveMessage", authError(e), "error"); }
   });
   function authError(error) {
@@ -439,22 +500,26 @@
       context.clearRect(0, 0, width, height);
       context.drawImage(bitmap, 0, 0, width, height);
 
-      for (const quality of [0.82, 0.74, 0.66, 0.58, 0.50, 0.42]) {
-        const blob = await new Promise(resolve =>
-          canvas.toBlob(resolve, "image/jpeg", quality)
-        );
+      // 품질이 낮을수록 용량이 줄어드므로, 이진 탐색으로 목표 용량 안의 가장 높은 품질을 찾습니다.
+      let low = 0.4;
+      let high = 0.85;
+      let best = null;
+      for (let step = 0; step < 4; step++) {
+        const quality = (low + high) / 2;
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", quality));
         if (!blob) throw new Error("사진 압축에 실패했습니다.");
+        if (blob.size <= targetBytes) { best = blob; low = quality; } else { high = quality; }
+      }
 
-        if (blob.size <= targetBytes) {
-          result = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = () => reject(new Error("사진 데이터를 읽지 못했습니다."));
-            reader.readAsDataURL(blob);
-          });
-          bitmap.close();
-          return result;
-        }
+      if (best) {
+        result = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error("사진 데이터를 읽지 못했습니다."));
+          reader.readAsDataURL(best);
+        });
+        bitmap.close();
+        return result;
       }
 
       width = Math.round(width * 0.8);
@@ -482,15 +547,31 @@
 
       btn.textContent = "Firestore 저장 중…";
       setMessage("saveMessage", "문제 정보를 저장하고 있습니다…");
-      await addDoc(problemsRef, {
-        name, type, grade, holds: state.holds.map(h => ({ x: h.x, y: h.y, role: h.role || "normal", size: h.size || 22 })),
-        ownerUid: state.user.uid, createdAt: serverTimestamp(),
-        imageDataUrl, imageUrl: ""
-      });
-
-      setMessage("saveMessage", "문제가 저장되었습니다. 문제 보기에서 확인할 수 있습니다.", "success");
-      $("problemName").value = ""; state.holds = []; state.selectedHoldIndex = -1; state.newHoldRole = "normal"; state.holdSize = 22; state.wallFile = null; state.wallImageUrl = "";
-      $("wallFile").value = ""; $("holdRole").value = "normal"; setWallImage($("editorWall"), ""); updateHoldTools(); updateHoldCount();
+      const holdsData = state.holds.map(h => ({ x: h.x, y: h.y, role: h.role || "normal", size: h.size || 22 }));
+      if (editingProblem) {
+        // 문제변경: 같은 id 문서를 덮어씁니다. 새 사진을 고르지 않았으면 기존 사진을 그대로 유지합니다.
+        const edit = editingProblem;
+        // 예전 방식(문서 안에 사진이 들어 있던 경우)은 사진 전용 문서로 옮깁니다.
+        if (!imageDataUrl && !edit.hasImage && edit.legacyImage) imageDataUrl = edit.legacyImage;
+        const hasImage = Boolean(imageDataUrl) || edit.hasImage;
+        const data = { name, type, grade, holds: holdsData, ownerUid: edit.ownerUid, createdAt: edit.createdAt || serverTimestamp(), hasImage };
+        if (!hasImage && edit.legacyUrl) data.imageUrl = edit.legacyUrl;
+        await setDoc(doc(db, "problems", edit.id), data);
+        if (imageDataUrl) await setDoc(doc(db, "problemImages", edit.id), { imageDataUrl, ownerUid: state.user.uid });
+        setMessage("saveMessage", "문제가 수정되었습니다.", "success");
+      } else {
+        const problemRef = await addDoc(problemsRef, {
+          name, type, grade, holds: holdsData,
+          ownerUid: state.user.uid, createdAt: serverTimestamp(),
+          hasImage: Boolean(imageDataUrl)
+        });
+        // 사진은 목록 조회에 섞이지 않도록 별도 문서(problemImages)에 저장합니다.
+        if (imageDataUrl) {
+          await setDoc(doc(db, "problemImages", problemRef.id), { imageDataUrl, ownerUid: state.user.uid });
+        }
+        setMessage("saveMessage", "문제가 저장되었습니다. 문제 보기에서 확인할 수 있습니다.", "success");
+      }
+      resetEditor();
       switchScreen("list");
     } catch (e) {
       console.error("문제 저장 오류:", e);
@@ -498,7 +579,7 @@
       setMessage("saveMessage", `저장에 실패했습니다: ${detail}`, "error");
     } finally {
       btn.disabled = false;
-      btn.textContent = "문제 저장하기";
+      renderEditorMode();
     }
   });
 
@@ -521,39 +602,121 @@
         <div class="problem-meta">${typeName(p.type)} · 홀드 ${(p.holds || []).length}개</div></div>
         <div style="display:flex;align-items:center;gap:8px;flex:none;">
           <div class="grade">${escapeHtml(p.grade || "-")}</div>
-          ${state.isAdmin ? `<button class="btn danger delete-problem" type="button" data-delete-id="${escapeHtml(p.id)}" style="min-height:34px;padding:6px 10px;">삭제</button>` : ""}
+          ${state.isAdmin ? `<button class="btn secondary edit-open" type="button" data-edit-id="${escapeHtml(p.id)}" aria-expanded="${openActionId === p.id}" style="min-height:34px;padding:6px 10px;">수정</button>` : ""}
         </div>
+        ${state.isAdmin && openActionId === p.id ? `<div class="problem-actions">
+          <button class="btn ghost edit-change" type="button" data-change-id="${escapeHtml(p.id)}" style="min-height:34px;padding:6px 10px;">문제변경</button>
+          <button class="btn danger delete-problem" type="button" data-delete-id="${escapeHtml(p.id)}" style="min-height:34px;padding:6px 10px;">삭제</button>
+        </div>` : ""}
       </article>`).join("");
-    list.querySelectorAll(".problem-card").forEach(card => {
-      const open = () => showDetail(card.dataset.id);
-      card.addEventListener("click", event => { if (!event.target.closest(".delete-problem")) open(); });
-      card.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && !e.target.closest(".delete-problem")) { e.preventDefault(); open(); } });
-    });
-    list.querySelectorAll(".delete-problem").forEach(button => button.addEventListener("click", async event => {
-      event.stopPropagation();
-      if (!state.isAdmin) return;
-      const problem = state.problems.find(item => item.id === button.dataset.deleteId);
-      if (!problem || !confirm(`'${problem.name || "이 문제"}'을(를) 삭제할까요? 삭제 후 복구할 수 없습니다.`)) return;
-      button.disabled = true; button.textContent = "삭제 중…";
-      try { await deleteDoc(doc(db, "problems", problem.id)); }
-      catch (error) { alert(`삭제에 실패했습니다: ${error.message}`); button.disabled = false; button.textContent = "삭제"; }
-    }));
   }
-  $("gradeFilter").addEventListener("change", renderProblemList);
-  $("searchInput").addEventListener("input", renderProblemList);
-
-  function showDetail(id) {
+  async function deleteProblem(button) {
+    if (!state.isAdmin) return;
+    const problem = state.problems.find(item => item.id === button.dataset.deleteId);
+    if (!problem || !confirm(`'${problem.name || "이 문제"}'을(를) 삭제할까요? 삭제 후 복구할 수 없습니다.`)) return;
+    button.disabled = true; button.textContent = "삭제 중…";
+    try {
+      await deleteDoc(doc(db, "problems", problem.id));
+      if (problem.hasImage) await deleteDoc(doc(db, "problemImages", problem.id));
+    }
+    catch (error) { alert(`삭제에 실패했습니다: ${error.message}`); button.disabled = false; button.textContent = "삭제"; }
+  }
+  // 문제변경: 선택한 문제를 편집 화면에 불러와 같은 문제를 수정합니다.
+  async function startEditProblem(id) {
+    if (!state.isAdmin) return;
     const p = state.problems.find(item => item.id === id);
     if (!p) return;
+    let image = p.hasImage ? "" : (p.imageDataUrl || "");
+    if (p.hasImage) {
+      try {
+        const snap = await getDoc(doc(db, "problemImages", id));
+        image = snap.exists() ? (snap.data().imageDataUrl || "") : "";
+      } catch (error) { alert(`사진을 불러오지 못했습니다: ${error.message}`); }
+    }
+    editingProblem = {
+      id, createdAt: p.createdAt, ownerUid: p.ownerUid || state.user.uid,
+      hasImage: Boolean(p.hasImage), legacyImage: p.hasImage ? "" : (p.imageDataUrl || ""), legacyUrl: p.imageUrl || ""
+    };
+    openActionId = "";
+    $("problemName").value = p.name || "";
+    $("problemType").value = p.type || "bouldering";
+    updateEditorGrades();
+    $("problemGrade").value = p.grade || "";
+    state.holds = (p.holds || []).map(h => ({ x: h.x, y: h.y, role: h.role || "normal", size: h.size || 22 }));
+    state.selectedHoldIndex = -1; state.newHoldRole = "normal"; state.holdSize = 22;
+    state.wallFile = null; clearWallPreview(); $("wallFile").value = "";
+    $("holdRole").value = "normal";
+    setWallImage($("editorWall"), image || p.imageUrl || "");
+    updateHoldTools(); updateHoldCount(); renderEditorMode();
+    setMessage("saveMessage", `'${p.name || "문제"}'을(를) 수정 중입니다. 고친 뒤 '수정 저장하기'를 누르세요.`);
+    switchScreen("create");
+  }
+  function renderEditorMode() {
+    const editing = Boolean(editingProblem);
+    $("saveBtn").textContent = editing ? "수정 저장하기" : "문제 저장하기";
+    $("cancelEditBtn").classList.toggle("hidden", !editing);
+  }
+  // 편집 화면을 새 문제 작성 상태로 되돌립니다.
+  function resetEditor() {
+    editingProblem = null;
+    $("problemName").value = ""; state.holds = []; state.selectedHoldIndex = -1; state.newHoldRole = "normal"; state.holdSize = 22; state.wallFile = null; clearWallPreview();
+    $("wallFile").value = ""; $("holdRole").value = "normal"; setWallImage($("editorWall"), ""); updateHoldTools(); updateHoldCount();
+    renderEditorMode();
+  }
+  $("cancelEditBtn").addEventListener("click", () => {
+    resetEditor();
+    setMessage("saveMessage", "수정을 취소했습니다.");
+    switchScreen("list");
+  });
+
+  // 목록 이벤트는 컨테이너에 한 번만 등록합니다. 카드가 다시 그려져도 이벤트를 새로 붙일 필요가 없습니다.
+  const problemListEl = $("problemList");
+  problemListEl.addEventListener("click", event => {
+    const openButton = event.target.closest(".edit-open");
+    if (openButton) { openActionId = openButton.dataset.editId; renderProblemList(); return; }
+    const changeButton = event.target.closest(".edit-change");
+    if (changeButton) { startEditProblem(changeButton.dataset.changeId); return; }
+    const deleteButton = event.target.closest(".delete-problem");
+    if (deleteButton) { deleteProblem(deleteButton); return; }
+    const card = event.target.closest(".problem-card");
+    if (card) showDetail(card.dataset.id);
+  });
+  problemListEl.addEventListener("keydown", event => {
+    const card = event.target.closest(".problem-card");
+    if (card && (event.key === "Enter" || event.key === " ") && !event.target.closest("button")) {
+      event.preventDefault();
+      showDetail(card.dataset.id);
+    }
+  });
+  ["input", "change"].forEach(type => $("gradeFilter").addEventListener(type, renderProblemList));
+  // 검색어를 입력할 때마다 바로 다시 그리지 않고, 입력이 잠시 멈추면 한 번만 다시 그립니다.
+  let searchTimer = null;
+  $("searchInput").addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(renderProblemList, 150);
+  });
+
+  async function showDetail(id) {
+    const p = state.problems.find(item => item.id === id);
+    if (!p) return;
+    state.detailId = id;
     $("detailTitle").textContent = p.name || "이름 없는 문제";
     $("detailMeta").textContent = `${typeName(p.type)} · ${p.grade || "-"} · 홀드 ${(p.holds || []).length}개`;
     $("detailOwner").textContent = `작성자 UID: ${p.ownerUid || "정보 없음"}`;
     const wall = $("detailWall");
     wall.innerHTML = "";
-    const hint = document.createElement("div"); hint.className = "wall-hint"; hint.textContent = "문제의 홀드 위치"; wall.appendChild(hint);
     setWallImage(wall, p.imageDataUrl || p.imageUrl || "");
-    renderHolds(wall, p.holds || [], false);
+    renderHolds(wall, p.holds || [], false, p.type === "endurance");
     $("detailBackdrop").classList.remove("hidden");
+    // 새로 저장된 문제는 사진을 상세를 열 때만 따로 가져옵니다. 예전 문제는 위에서 바로 표시됩니다.
+    if (!p.imageDataUrl && !p.imageUrl && p.hasImage) {
+      try {
+        const snap = await getDoc(doc(db, "problemImages", id));
+        if (state.detailId === id && snap.exists()) setWallImage(wall, snap.data().imageDataUrl);
+      } catch (error) {
+        console.error("사진 불러오기 오류:", error);
+      }
+    }
   }
   $("closeDetail").addEventListener("click", () => $("detailBackdrop").classList.add("hidden"));
   $("detailBackdrop").addEventListener("click", e => { if (e.target === $("detailBackdrop")) $("detailBackdrop").classList.add("hidden"); });
@@ -575,7 +738,8 @@
     $("problemList").innerHTML = `<div class="panel empty">문제를 불러오지 못했습니다.<br>${escapeHtml(error.message)}<br><span class="small">Firestore 보안 규칙과 데이터베이스 생성 여부를 확인해 주세요.</span></div>`;
   });
 
-  updateGradeControls();
+  updateEditorGrades();
+  updateFilterGrades();
   updateHoldTools();
   updateHoldCount();
   renderAuth();
