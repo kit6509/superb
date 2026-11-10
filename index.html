@@ -214,6 +214,10 @@
           <input id="problemName" maxlength="60" placeholder="예: 파란 홀드 다이노" />
         </div>
         <div class="field">
+          <label for="problemSetter">출제자</label>
+          <input id="problemSetter" maxlength="20" placeholder="예: 홍길동" />
+        </div>
+        <div class="field">
           <label for="problemGrade">등급</label>
           <select id="problemGrade"></select>
         </div>
@@ -233,8 +237,7 @@
     </div>
     <div class="detail-photo-actions">
       <button id="detailOriginalBtn" class="btn secondary" type="button" aria-pressed="false">사진 원본보기</button>
-      <button id="detailDownloadBtn" class="btn secondary" type="button">사진 다운로드</button>
-    </div>
+      <button id="detailDownloadBtn" class="btn secondary" type="button">사진 다운로드</button>    </div>
     <div id="detailWall" class="wall"></div>
   </div>
 </div>
@@ -320,6 +323,20 @@
       : Array.from({ length: 10 }, (_, i) => String(i + 1));
   }
   function typeName(type) { return type === "bouldering" ? "볼더링" : "지구력"; }
+  // 출제일은 Firestore Timestamp(toDate) 또는 테스트용 숫자 시각을 받아 YYYY.MM.DD로 보여 줍니다.
+  function formatDate(value) {
+    const d = value?.toDate ? value.toDate() : (typeof value === "number" ? new Date(value) : null);
+    if (!d || isNaN(d)) return "";
+    return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+  }
+  // 출제자와 출제일을 " · 출제 이름 · 날짜" 형태로 만듭니다. 값이 없으면 빈 문자열입니다.
+  function setterAndDate(p) {
+    const parts = [];
+    if (p.setter) parts.push(`출제 ${p.setter}`);
+    const date = formatDate(p.createdAt);
+    if (date) parts.push(date);
+    return parts.length ? ` · ${parts.join(" · ")}` : "";
+  }
   function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
   }
@@ -677,7 +694,7 @@
       btn.textContent = "Firestore 저장 중…";
       setMessage("saveMessage", "문제 정보를 저장하고 있습니다…");
       // 사진 보정값(채도, 흰색 배경 투명도)도 함께 저장해 보는 사람 모두 같은 모습으로 봅니다.
-      const base = { name, type, grade, holds: state.holds.map(normalizeHold), photo: editorPhotoSettings() };
+      const base = { name, setter: $("problemSetter").value.trim(), type, grade, holds: state.holds.map(normalizeHold), photo: editorPhotoSettings() };
       const edit = state.editingProblem;
       if (edit) {
         // 문제변경: 같은 id 문서를 덮어씁니다. 새 사진을 고르지 않았으면 기존 사진을 그대로 유지합니다.
@@ -732,7 +749,7 @@
     return `
       <article class="problem-card" data-id="${id}" tabindex="0" role="button" aria-label="${escapeHtml(p.name)} 상세 보기">
         <div><div class="problem-name">${escapeHtml(p.name || "이름 없는 문제")}</div>
-        <div class="problem-meta">${typeName(p.type)} · 홀드 ${(p.holds || []).length}개</div></div>
+        <div class="problem-meta">${typeName(p.type)} · 홀드 ${(p.holds || []).length}개${escapeHtml(setterAndDate(p))}</div></div>
         <div class="card-side">
           <div class="grade">${escapeHtml(p.grade || "-")}</div>
           ${editButton}
@@ -805,6 +822,7 @@
     };
     state.openActionId = "";
     $("problemName").value = p.name || "";
+    $("problemSetter").value = p.setter || "";
     $("problemType").value = p.type || "bouldering";
     updateEditorGrades();
     $("problemGrade").value = p.grade || "";
@@ -821,6 +839,7 @@
   function resetEditor() {
     state.editingProblem = null;
     $("problemName").value = "";
+    $("problemSetter").value = "";
     fillEditor();
   }
   $("cancelEditBtn").addEventListener("click", () => {
@@ -871,7 +890,7 @@
     if (!p) return;
     state.detailId = id;
     $("detailTitle").textContent = p.name || "이름 없는 문제";
-    $("detailMeta").textContent = `${typeName(p.type)} · ${p.grade || "-"} · 홀드 ${(p.holds || []).length}개`;
+    $("detailMeta").textContent = `${typeName(p.type)} · ${p.grade || "-"} · 홀드 ${(p.holds || []).length}개${setterAndDate(p)}`;
     const wall = $("detailWall");
     wall.innerHTML = "";
     // 편집 때 정한 채도와 흰색 배경을 상세 화면에도 같은 모습으로 적용합니다.
