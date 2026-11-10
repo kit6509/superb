@@ -256,7 +256,7 @@
   const db = getFirestore(app);
 
   const $ = (id) => document.getElementById(id);
-  const ADMIN_EMAIL = "kit6509@naver.com";
+  const ADMIN_EMAIL = "superb@superb.com";
   let holdDrag = null;        // 홀드 드래그 상태 { index, pointerId, moved }
   let ignoreHoldClick = false; // 드래그 직후 발생하는 click 무시용
   let openActionId = "";       // 목록에서 '수정'을 눌러 펼친 문제 id
@@ -711,7 +711,8 @@
   const problemListEl = $("problemList");
   problemListEl.addEventListener("click", event => {
     const openButton = event.target.closest(".edit-open");
-    if (openButton) { openActionId = openButton.dataset.editId; renderProblemList(); return; }
+    // 수정을 다시 누르면 문제변경/삭제 버튼을 접습니다.
+    if (openButton) { const id = openButton.dataset.editId; openActionId = openActionId === id ? "" : id; renderProblemList(); return; }
     const changeButton = event.target.closest(".edit-change");
     if (changeButton) { startEditProblem(changeButton.dataset.changeId); return; }
     const deleteButton = event.target.closest(".delete-problem");
@@ -779,6 +780,25 @@
       canvas.height = photo.naturalHeight;
       const ctx = canvas.getContext("2d");
       ctx.drawImage(photo, 0, 0);
+      // 화면의 사진 필터(밝기 80%, 채도 70%)와 같은 색으로 맞춥니다. 브라우저마다 ctx.filter 지원이 달라 픽셀을 직접 계산합니다.
+      {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const d = imageData.data;
+        const sat = 0.7, bright = 0.8;
+        const m = [
+          0.213 + 0.787 * sat, 0.715 - 0.715 * sat, 0.072 - 0.072 * sat,
+          0.213 - 0.213 * sat, 0.715 + 0.285 * sat, 0.072 - 0.072 * sat,
+          0.213 - 0.213 * sat, 0.715 - 0.715 * sat, 0.072 + 0.928 * sat
+        ];
+        const clamp255 = v => Math.max(0, Math.min(255, Math.round(v)));
+        for (let i = 0; i < d.length; i += 4) {
+          const r = d[i] * bright, g = d[i + 1] * bright, b = d[i + 2] * bright;
+          d[i] = clamp255(m[0] * r + m[1] * g + m[2] * b);
+          d[i + 1] = clamp255(m[3] * r + m[4] * g + m[5] * b);
+          d[i + 2] = clamp255(m[6] * r + m[7] * g + m[8] * b);
+        }
+        ctx.putImageData(imageData, 0, 0);
+      }
       // 화면에 보이는 벽 크기와 원본 사진 크기의 비율로 홀드 크기를 맞춥니다.
       const scale = photo.naturalWidth / wall.getBoundingClientRect().width;
       const colors = { normal: "rgba(147,197,253,.6)", start: "rgba(134,239,172,.6)", finish: "rgba(252,165,165,.6)" };
@@ -792,17 +812,25 @@
         const r = size / 2;
         const cx = hold.x * canvas.width;
         const cy = hold.y * canvas.height;
-        // 흰색 외곽선(화면의 box-shadow와 같은 두께)
+        // 화면의 box-shadow와 같은 흰색 외곽선과 그림자
+        ctx.shadowColor = "rgba(0,0,0,.28)";
+        ctx.shadowBlur = 6 * scale;
+        ctx.shadowOffsetY = 1 * scale;
         ctx.beginPath(); ctx.arc(cx, cy, r + 2 * scale, 0, Math.PI * 2);
         ctx.fillStyle = "rgba(255,255,255,.95)"; ctx.fill();
+        ctx.shadowColor = "transparent";
         ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.fillStyle = colors[role] || colors.normal; ctx.fill();
         if (showNumbers && isNormal) {
+          ctx.shadowColor = "rgba(255,255,255,.9)";
+          ctx.shadowBlur = 2 * scale;
           ctx.fillStyle = "#0f172a";
           ctx.font = `700 ${size * 0.5}px system-ui, sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText(String(sequence), cx, cy);
+          ctx.shadowColor = "transparent";
+          ctx.shadowBlur = 0;
         }
       });
       canvas.toBlob(blob => {
