@@ -755,6 +755,9 @@
       return p.type === state.listType && inRange &&
         (!keyword || String(p.name || "").toLocaleLowerCase().includes(keyword));
     });
+    // 난이도 오름차순으로 정렬합니다. 같은 등급끼리는 기존 순서(최신순)를 유지하고, 등급 목록에 없는 문제는 맨 뒤로 보냅니다.
+    const rankOf = p => { const i = values.indexOf(p.grade); return i < 0 ? values.length : i; };
+    filtered.sort((a, b) => rankOf(a) - rankOf(b));
     $("problemList").innerHTML = filtered.length
       ? filtered.map(renderCard).join("")
       : '<div class="panel empty">조건에 맞는 문제가 없습니다.<br>첫 번째 문제를 등록해 보세요!</div>';
