@@ -4,55 +4,60 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#111827" />
-  <title>스프레이월 클라이밍 문제</title>
+  <title>수퍼비 스프레이월</title>
   <style>
     :root {
-      --bg:#f3f5f8; --surface:#fff; --ink:#172033; --muted:#687386;
-      --line:#e2e7ef; --primary:#2563eb; --primary-dark:#1d4ed8;
-      --soft:#eaf1ff; --danger:#dc2626; --radius:18px;
+      --bg:#0f1113; --surface:#1a1d21; --ink:#eceff3; --muted:#9aa3ad;
+      --line:#2c3138; --primary:#f59e0b; --primary-dark:#d97706;
+      --soft:#3a2a10; --danger:#f87171; --radius:14px;
     }
     * { box-sizing:border-box; }
     body { margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Noto Sans KR","Malgun Gothic",sans-serif; }
     button,input,select { font:inherit; }
     button { cursor:pointer; }
     .app { max-width:760px; min-height:100vh; margin:0 auto; background:var(--bg); padding-bottom:32px; }
-    header { padding:22px 18px 14px; background:#111827; color:white; }
+    header { padding:24px 18px 16px; background:#16191d; background-image:repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 2px, transparent 2px 9px); color:var(--ink); border-bottom:3px solid var(--primary); }
     .brand { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-    .brand h1 { font-size:20px; margin:0; letter-spacing:-.5px; }
-    .brand p { margin:5px 0 0; color:#cbd5e1; font-size:12px; }
-    .auth-status { color:#dbeafe; font-size:12px; text-align:right; }
+    .brand h1 { font-size:22px; margin:0; letter-spacing:-.6px; font-weight:800; }
+    .brand p { margin:5px 0 0; color:var(--muted); font-size:12px; }
+    .auth-status { color:var(--muted); font-size:12px; text-align:right; }
     .header-actions { display:flex; flex-direction:column; align-items:flex-end; gap:7px; }
-    .mini-login { border:1px solid #64748b; border-radius:8px; padding:5px 8px; background:#263244; color:#e2e8f0; font-size:10px; font-weight:600; white-space:nowrap; }
-    .nav { display:flex; gap:8px; padding:14px 16px 0; background:#111827; }
-    .nav button { flex:1; border:0; border-radius:12px 12px 0 0; padding:13px 8px; color:#cbd5e1; background:#263244; font-weight:700; }
+    .mini-login { border:1px solid #3b4149; border-radius:8px; padding:5px 8px; background:#23272d; color:#e5e7eb; font-size:10px; font-weight:600; white-space:nowrap; }
+    .nav { display:flex; gap:8px; padding:14px 16px 0; background:#16191d; }
+    .nav button { flex:1; border:0; border-radius:12px 12px 0 0; padding:13px 8px; color:#9aa3ad; background:#23272d; font-weight:700; }
     .nav button.admin-login-tab { flex:0 0 auto; padding:8px 12px; margin-left:auto; font-size:11px; border-radius:9px 9px 0 0; opacity:.9; }
-    .nav button.active { color:#111827; background:var(--bg); }
+    .nav button.active { color:var(--primary); background:var(--bg); }
     main { padding:18px 16px 28px; }
     .panel { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px; margin-bottom:14px; box-shadow:0 4px 16px rgba(15,23,42,.035); }
     .section-title { margin:0 0 13px; font-size:17px; letter-spacing:-.3px; }
     .muted { color:var(--muted); font-size:13px; line-height:1.5; }
     .field { display:flex; flex-direction:column; gap:7px; margin:12px 0; }
-    .field label { font-size:13px; font-weight:700; color:#394458; }
-    input,select { width:100%; min-height:46px; border:1px solid #d7deea; border-radius:11px; padding:10px 12px; background:white; color:var(--ink); outline:none; }
-    input:focus,select:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(37,99,235,.1); }
+    .field label { font-size:13px; font-weight:700; color:#cbd5e1; }
+    input,select { width:100%; min-height:46px; border:1px solid #3b4149; border-radius:11px; padding:10px 12px; background:#121417; color:var(--ink); outline:none; }
+    input:focus,select:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(245,158,11,.2); }
     .row { display:flex; gap:10px; }
     .row > * { flex:1; min-width:0; }
-    .btn { border:0; border-radius:12px; padding:13px 16px; background:var(--primary); color:white; font-weight:800; min-height:46px; }
+    .btn { border:0; border-radius:12px; padding:13px 16px; background:var(--primary); color:#111; font-weight:800; min-height:46px; box-shadow:none; transition:background .15s, transform .1s; }
     .btn:hover { background:var(--primary-dark); }
-    .btn.secondary { color:#263244; background:#e9edf4; }
-    .btn.ghost { color:var(--primary); background:var(--soft); }
-    .btn.danger { background:#fee2e2; color:#991b1b; }
+    .btn:active { transform:scale(.98); }
+    .btn.secondary { color:#e5e7eb; background:#2a2f36; }
+    .btn.ghost { color:#fbbf24; background:#3a2a10; }
+    .btn.danger { background:#4a1d1d; color:#fca5a5; }
     .btn:disabled { opacity:.55; cursor:not-allowed; }
     .full { width:100%; }
     .wall-wrap { margin-top:12px; }
-    .wall { position:relative; width:100%; aspect-ratio:4/5; overflow:hidden; border-radius:14px; border:1px solid #cbd5e1; background-color:#f8fafc;
-      background-image:linear-gradient(#dce3ed 1px,transparent 1px),linear-gradient(90deg,#dce3ed 1px,transparent 1px);
+    .wall { position:relative; width:100%; aspect-ratio:4/5; overflow:hidden; border-radius:14px; border:1px solid #353b44; background-color:#1f2328;
+      background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);
       background-size:24px 24px; touch-action:manipulation; }
-    .wall.has-image { background-image:none; background-color:#dbe2ea; }
-    .wall img.wall-image { width:100%; height:100%; object-fit:fill; display:block; pointer-events:none; filter:brightness(.8) saturate(var(--photo-sat, .7)); opacity:var(--photo-opacity, 1); }
+    .wall.has-image { background-image:none; background-color:#14171b; }
+    .wall img.wall-image { width:100%; height:100%; object-fit:fill; display:block; pointer-events:none; filter:brightness(.8) saturate(var(--photo-sat, .7)); }
+    .photo-veil { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:1; }
+    #editorWall:not(.has-image) .photo-veil { display:none; }
     .photo-tools { display:none; flex-direction:column; gap:8px; margin-top:10px; }
     #editorWall.has-image + .photo-tools { display:flex; }
     .wall.original-photo img.wall-image { filter:none; }
+    .detail-photo-actions { display:flex; gap:8px; margin-bottom:10px; }
+    .detail-photo-actions .btn { flex:1; }
     .hold { position:absolute; width:var(--hold-size,22px); height:var(--hold-size,22px); border:3px solid transparent; border-radius:50%; background:rgba(147,197,253,.6); transform:translate(-50%,-50%); box-shadow:0 0 0 2px rgba(255,255,255,.95),0 1px 6px rgba(0,0,0,.28); pointer-events:auto; cursor:pointer; padding:0; z-index:2; touch-action:none; }
     .hold.start { background:rgba(134,239,172,.6); }
     .hold.finish { background:rgba(252,165,165,.6); }
@@ -60,7 +65,7 @@
     .hold-no { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font:700 calc(var(--hold-size,22px) * .5)/1 system-ui,sans-serif; color:#0f172a; text-shadow:0 0 2px rgba(255,255,255,.9); pointer-events:none; }
     .hold-tools .role-control { flex:1 1 160px; }
     .hold-tools { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px; }
-    .hold-tools .size-control { flex:1 1 180px; display:flex; align-items:center; gap:9px; font-size:13px; color:#394458; }
+    .hold-tools .size-control { flex:1 1 180px; display:flex; align-items:center; gap:9px; font-size:13px; color:#cbd5e1; }
     .hold-tools input[type="range"] { min-height:28px; padding:0; accent-color:var(--primary); }
     .btn.active-tool { background:#fee2e2; color:#991b1b; outline:2px solid #ef4444; }
     .toolbar { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
@@ -68,25 +73,27 @@
     .filters { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
     .filters .search { grid-column:1/-1; }
     .type-tabs { display:flex; gap:8px; margin-bottom:12px; }
-    .type-tabs button { flex:1; padding:11px; border:1px solid var(--line); border-radius:11px; background:white; color:#475569; font-weight:800; }
-    .type-tabs button.active { border-color:var(--primary); background:var(--soft); color:var(--primary); }
+    .type-tabs button { flex:1; padding:11px; border:1px solid var(--line); border-radius:11px; background:#121417; color:#9aa3ad; font-weight:800; }
+    .type-tabs button.active { border-color:var(--primary); background:#3a2a10; color:#fbbf24; }
     .problem-list { display:flex; flex-direction:column; gap:9px; }
-    .problem-card { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; padding:14px; border:1px solid var(--line); border-radius:14px; background:white; cursor:pointer; }
+    .problem-card { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; padding:14px; border:1px solid var(--line); border-radius:14px; background:#121417; cursor:pointer; }
     .problem-actions { display:flex; gap:8px; width:100%; justify-content:flex-end; }
-    .problem-card:active { background:#f8fafc; }
+    .problem-card { transition:box-shadow .15s, transform .15s; }
+    .problem-card:hover { box-shadow:0 8px 22px rgba(0,0,0,.45); transform:translateY(-1px); }
+    .problem-card:active { background:#1a1d21; }
     .problem-name { font-weight:800; overflow-wrap:anywhere; }
     .problem-meta { margin-top:5px; color:var(--muted); font-size:12px; }
-    .grade { flex:none; border-radius:10px; padding:7px 10px; background:#eff6ff; color:#1d4ed8; font-weight:900; }
+    .grade { flex:none; border-radius:10px; padding:7px 10px; background:var(--primary); color:#111; font-weight:900; }
     .empty { padding:26px 12px; text-align:center; color:var(--muted); font-size:14px; }
     .hidden { display:none !important; }
     .message { margin:10px 0; font-size:13px; line-height:1.5; }
-    .message.error { color:var(--danger); }
-    .message.success { color:#15803d; }
+    .message.error { color:#fca5a5; }
+    .message.success { color:#86efac; }
     .modal-backdrop { position:fixed; inset:0; z-index:10; background:rgba(15,23,42,.6); display:flex; align-items:flex-end; justify-content:center; padding:12px; }
     .modal { width:100%; max-width:720px; max-height:92vh; overflow:auto; border-radius:20px; background:var(--bg); padding:18px; }
     .modal-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
     .modal-head h2 { font-size:18px; margin:0; }
-    .close { border:0; width:36px; height:36px; border-radius:50%; background:#e5eaf1; font-size:20px; }
+    .close { border:0; width:36px; height:36px; border-radius:50%; background:#23272d; color:#e5e7eb; font-size:20px; }
     .small { font-size:11px; color:var(--muted); }
     @media (min-width:600px) {
       main { padding:22px; }
@@ -100,8 +107,7 @@
   <header>
     <div class="brand">
       <div>
-        <h1>🧗 스프레이월 문제집</h1>
-        <p>홀드를 찍고, 나만의 클라이밍 문제를 공유하세요.</p>
+        <h1>🧗 수퍼비 스프레이월</h1>
       </div>
       <div class="header-actions">
         <div class="auth-status" id="authStatus">로그인 확인 중…</div>
@@ -161,15 +167,16 @@
         </div>
         <div class="wall-wrap">
           <div id="editorWall" class="wall" aria-label="홀드 위치 선택 영역">
+            <div id="photoVeil" class="photo-veil" aria-hidden="true"></div>
           </div>
           <div class="photo-tools">
             <label class="size-control" for="photoSat">
               <span>사진 채도</span> <strong id="photoSatValue">70%</strong>
               <input id="photoSat" type="range" min="0" max="100" step="5" value="70" />
             </label>
-            <label class="size-control" for="photoTransparency">
-              <span>사진 투명도</span> <strong id="photoTransparencyValue">0%</strong>
-              <input id="photoTransparency" type="range" min="0" max="90" step="5" value="0" />
+            <label class="size-control" for="photoVeilTransparency">
+              <span>흰색 배경 투명도</span> <strong id="photoVeilTransparencyValue">100%</strong>
+              <input id="photoVeilTransparency" type="range" min="0" max="100" step="5" value="100" />
             </label>
           </div>
           <div class="toolbar">
@@ -215,7 +222,10 @@
       <div><h2 id="detailTitle">문제 상세</h2><div id="detailMeta" class="muted"></div></div>
       <button id="closeDetail" class="close" type="button" aria-label="닫기">×</button>
     </div>
-    <button id="detailOriginalBtn" class="btn secondary" type="button" style="margin-bottom:10px;" aria-pressed="false">사진 원본보기</button>
+    <div class="detail-photo-actions">
+      <button id="detailOriginalBtn" class="btn secondary" type="button" aria-pressed="false">사진 원본보기</button>
+      <button id="detailDownloadBtn" class="btn secondary" type="button">사진 다운로드</button>
+    </div>
     <div id="detailWall" class="wall"></div>
   </div>
 </div>
@@ -423,17 +433,18 @@
   };
   ["input", "change"].forEach(type => $("holdRole").addEventListener(type, onHoldRoleChange));
   // 관리자 편집 화면의 사진 채도/투명도 조절. 값은 편집 벽 요소의 CSS 변수로 전달합니다.
+  // 흰색 배경(photoVeil)은 사진 위에 깔리며, 투명도 100%일 때 완전히 투명해서 원본 사진이 보입니다.
   function applyPhotoStyle() {
     const sat = Number($("photoSat").value);
-    const transparency = Number($("photoTransparency").value);
+    const transparency = Number($("photoVeilTransparency").value);
     $("photoSatValue").textContent = `${sat}%`;
-    $("photoTransparencyValue").textContent = `${transparency}%`;
+    $("photoVeilTransparencyValue").textContent = `${transparency}%`;
     $("editorWall").style.setProperty("--photo-sat", String(sat / 100));
-    $("editorWall").style.setProperty("--photo-opacity", String(1 - transparency / 100));
+    $("photoVeil").style.opacity = String(1 - transparency / 100);
   }
   ["input", "change"].forEach(type => {
     $("photoSat").addEventListener(type, applyPhotoStyle);
-    $("photoTransparency").addEventListener(type, applyPhotoStyle);
+    $("photoVeilTransparency").addEventListener(type, applyPhotoStyle);
   });
   applyPhotoStyle();
   $("holdSize").addEventListener("input", event => {
@@ -735,6 +746,8 @@
     wall.classList.remove("original-photo");
     $("detailOriginalBtn").textContent = "사진 원본보기";
     $("detailOriginalBtn").setAttribute("aria-pressed", "false");
+    // 사진이 있는 문제만 다운로드 버튼을 보여줍니다.
+    $("detailDownloadBtn").classList.toggle("hidden", !(p.imageDataUrl || p.imageUrl || p.hasImage));
     setWallImage(wall, p.imageDataUrl || p.imageUrl || "");
     renderHolds(wall, p.holds || [], false, p.type === "endurance");
     $("detailBackdrop").classList.remove("hidden");
@@ -748,6 +761,66 @@
       }
     }
   }
+  // 상세 화면의 사진을 홀드 표시가 그려진 이미지로 저장합니다.
+  $("detailDownloadBtn").addEventListener("click", async () => {
+    const p = state.problems.find(item => item.id === state.detailId);
+    const wall = $("detailWall");
+    const img = wall.querySelector("img.wall-image");
+    if (!p || !img || !img.getAttribute("src")) {
+      alert("다운로드할 사진을 아직 불러오지 못했습니다. 잠시 후 다시 눌러 주세요.");
+      return;
+    }
+    try {
+      const photo = new Image();
+      photo.src = img.getAttribute("src");
+      await photo.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = photo.naturalWidth;
+      canvas.height = photo.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(photo, 0, 0);
+      // 화면에 보이는 벽 크기와 원본 사진 크기의 비율로 홀드 크기를 맞춥니다.
+      const scale = photo.naturalWidth / wall.getBoundingClientRect().width;
+      const colors = { normal: "rgba(147,197,253,.6)", start: "rgba(134,239,172,.6)", finish: "rgba(252,165,165,.6)" };
+      const showNumbers = p.type === "endurance";
+      let sequence = 0;
+      (p.holds || []).forEach(hold => {
+        const role = hold.role || "normal";
+        const isNormal = role === "normal";
+        if (isNormal) sequence += 1;
+        const size = (hold.size || 22) * scale;
+        const r = size / 2;
+        const cx = hold.x * canvas.width;
+        const cy = hold.y * canvas.height;
+        // 흰색 외곽선(화면의 box-shadow와 같은 두께)
+        ctx.beginPath(); ctx.arc(cx, cy, r + 2 * scale, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255,255,255,.95)"; ctx.fill();
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = colors[role] || colors.normal; ctx.fill();
+        if (showNumbers && isNormal) {
+          ctx.fillStyle = "#0f172a";
+          ctx.font = `700 ${size * 0.5}px system-ui, sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(String(sequence), cx, cy);
+        }
+      });
+      canvas.toBlob(blob => {
+        if (!blob) { alert("이미지를 만들지 못했습니다."); return; }
+        const url = URL.createObjectURL(blob);
+        const baseName = String(p.name || "문제").replace(/[\\/:*?"<>|]/g, "_");
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${baseName}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }, "image/jpeg", 0.92);
+    } catch (error) {
+      alert(`사진을 저장하지 못했습니다: ${error.message}`);
+    }
+  });
   // 사진을 원래 색으로 보여줍니다. 홀드 표시는 그대로 둡니다.
   $("detailOriginalBtn").addEventListener("click", () => {
     const btn = $("detailOriginalBtn");
