@@ -77,6 +77,10 @@
     .toolbar .btn { flex:1; min-width:120px; }
     .filters { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
     .filters .search { grid-column:1/-1; }
+    .filters .range-field { grid-column:1/-1; margin:0; }
+    .grade-range { display:flex; align-items:center; gap:6px; }
+    .grade-range select { flex:1; min-width:0; }
+    .grade-range span { color:#6b7280; font-size:13px; font-weight:700; }
     .type-tabs { display:flex; gap:8px; margin-bottom:12px; }
     .type-tabs button { flex:1; padding:11px; border:1px solid var(--line); border-radius:11px; background:#ffffff; color:#6b7280; font-weight:800; }
     .type-tabs button.active { border-color:var(--primary); background:#fef3c7; color:#92400e; }
@@ -134,9 +138,13 @@
           <button type="button" data-list-type="endurance">지구력</button>
         </div>
         <div class="filters">
-          <div class="field">
-            <label for="gradeFilter">등급 필터</label>
-            <select id="gradeFilter"><option value="">전체 등급</option></select>
+          <div class="field range-field">
+            <label for="gradeFrom">등급 범위</label>
+            <div class="grade-range">
+              <select id="gradeFrom" aria-label="시작 등급"><option value="">전체</option></select>
+              <span>~</span>
+              <select id="gradeTo" aria-label="끝 등급"><option value="">전체</option></select>
+            </div>
           </div>
           <div class="field search">
             <label for="searchInput">문제 이름 검색</label>
@@ -324,7 +332,34 @@
       values.map(g => `<option value="${g}">${g}</option>`).join("");
   }
   const updateEditorGrades = () => fillGradeSelect($("problemGrade"), $("problemType").value);
-  const updateFilterGrades = () => fillGradeSelect($("gradeFilter"), state.listType, true);
+  // 등급 범위 필터: 탭(볼더링/지구력)마다 마지막으로 고른 범위를 따로 기억해 두었다가 탭을 바꾸면 되살립니다.
+  const GRADE_RANGE_KEY = "climb.gradeRanges";
+  // 저장된 범위를 불러옵니다. 저장소를 못 읽는 환경(비공개 창 등)이면 빈 범위로 시작합니다.
+  const gradeRanges = (() => {
+    const empty = { bouldering: { from: "", to: "" }, endurance: { from: "", to: "" } };
+    try {
+      const saved = JSON.parse(localStorage.getItem(GRADE_RANGE_KEY) || "null");
+      if (saved && typeof saved === "object") {
+        Object.keys(empty).forEach(type => {
+          if (saved[type]) empty[type] = { from: String(saved[type].from || ""), to: String(saved[type].to || "") };
+        });
+      }
+    } catch { /* 저장된 값이 없거나 읽을 수 없으면 빈 범위를 씁니다 */ }
+    return empty;
+  })();
+  const updateFilterGrades = () => {
+    const options = '<option value="">전체</option>' + grades(state.listType).map(g => `<option value="${g}">${g}</option>`).join("");
+    $("gradeFrom").innerHTML = options;
+    $("gradeTo").innerHTML = options;
+    const saved = gradeRanges[state.listType];
+    $("gradeFrom").value = saved.from;
+    $("gradeTo").value = saved.to;
+  };
+  const rememberGradeRange = () => {
+    gradeRanges[state.listType] = { from: $("gradeFrom").value, to: $("gradeTo").value };
+    try { localStorage.setItem(GRADE_RANGE_KEY, JSON.stringify(gradeRanges)); } catch { /* 저장에 실패해도 필터는 그대로 동작합니다 */ }
+    renderProblemList();
+  };
   function clearWallPreview() {
     if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
     state.previewUrl = "";
@@ -706,13 +741,20 @@
       </article>`;
   }
   function renderProblemList() {
-    const grade = $("gradeFilter").value;
+    const values = grades(state.listType);
+    const from = $("gradeFrom").value, to = $("gradeTo").value;
+    // 시작이 끝보다 뒤로 선택되어도 범위가 맞도록 두 값을 바꿔서 봅니다.
+    let lo = from ? values.indexOf(from) : 0;
+    let hi = to ? values.indexOf(to) : values.length - 1;
+    if (lo > hi) [lo, hi] = [hi, lo];
     const keyword = $("searchInput").value.trim().toLocaleLowerCase();
-    const filtered = state.problems.filter(p =>
-      p.type === state.listType &&
-      (!grade || p.grade === grade) &&
-      (!keyword || String(p.name || "").toLocaleLowerCase().includes(keyword))
-    );
+    const filtered = state.problems.filter(p => {
+      const index = values.indexOf(p.grade);
+      // 범위를 고르지 않았으면 등급 목록에 없는 문제도 모두 보입니다.
+      const inRange = (!from && !to) || (index >= lo && index <= hi);
+      return p.type === state.listType && inRange &&
+        (!keyword || String(p.name || "").toLocaleLowerCase().includes(keyword));
+    });
     $("problemList").innerHTML = filtered.length
       ? filtered.map(renderCard).join("")
       : '<div class="panel empty">조건에 맞는 문제가 없습니다.<br>첫 번째 문제를 등록해 보세요!</div>';
@@ -804,7 +846,8 @@
       showDetail(card.dataset.id);
     }
   });
-  onInput($("gradeFilter"), renderProblemList);
+  onInput($("gradeFrom"), rememberGradeRange);
+  onInput($("gradeTo"), rememberGradeRange);
   // 검색어를 입력할 때마다 바로 다시 그리지 않고, 입력이 잠시 멈추면 한 번만 다시 그립니다.
   let searchTimer = null;
   $("searchInput").addEventListener("input", () => {
