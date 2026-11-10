@@ -51,23 +51,23 @@
     .panel-head .btn { min-height:36px; padding:8px 12px; }
     .card-side { display:flex; align-items:center; gap:8px; flex:none; }
     .wall-wrap { margin-top:12px; }
-    .wall { position:relative; width:100%; aspect-ratio:4/5; overflow:hidden; border-radius:14px; border:1px solid #d1d5db; background-color:#f3f4f6;
+    .wall { position:relative; width:100%; aspect-ratio:4/5; overflow:hidden; border-radius:14px; border:0; background-color:#f3f4f6;
       background-image:linear-gradient(rgba(0,0,0,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.06) 1px,transparent 1px);
       background-size:24px 24px; touch-action:manipulation; }
     .wall.has-image { background-image:none; background-color:#e5e7eb; }
     .wall img.wall-image { width:100%; height:100%; object-fit:fill; display:block; pointer-events:none; filter:brightness(var(--photo-bright, .8)) saturate(var(--photo-sat, .7)); }
     .photo-veil { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:1; }
-    #editorWall:not(.has-image) .photo-veil { display:none; }
+    .wall:not(.has-image) .photo-veil, .wall.original-photo .photo-veil { display:none; }
     .photo-tools { display:none; flex-direction:column; gap:8px; margin-top:10px; }
     #editorWall.has-image + .photo-tools { display:flex; }
     .wall.original-photo img.wall-image { filter:none; }
     .detail-photo-actions { display:flex; gap:8px; margin-bottom:10px; }
     .detail-photo-actions .btn { flex:1; }
-    .hold { position:absolute; width:var(--hold-size,22px); height:var(--hold-size,22px); border:3px solid transparent; border-radius:50%; background:var(--hold-normal, rgba(96,190,255,.85)); transform:translate(-50%,-50%); box-shadow:0 0 0 2px rgba(255,255,255,.95),0 1px 6px rgba(0,0,0,.28); pointer-events:auto; cursor:pointer; padding:0; z-index:2; touch-action:none; }
+    .hold { position:absolute; width:var(--hold-size,12px); height:var(--hold-size,12px); border:min(3px, calc(var(--hold-size,12px) * .15)) solid transparent; border-radius:50%; background:var(--hold-normal, rgba(160,215,255,.9)); transform:translate(-50%,-50%); box-shadow:0 0 0 max(1px, calc(var(--hold-size,12px) * .1)) rgba(255,255,255,.95),0 1px 6px rgba(0,0,0,.28); pointer-events:auto; cursor:pointer; padding:0; z-index:2; touch-action:none; }
     .hold.start { background:var(--hold-start, rgba(110,255,160,.85)); }
     .hold.finish { background:var(--hold-finish, rgba(255,130,210,.85)); }
     .hold.selected { outline:3px solid #f59e0b; outline-offset:3px; z-index:4; }
-    .hold-no { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font:700 calc(var(--hold-size,22px) * .5)/1 system-ui,sans-serif; color:#0f172a; text-shadow:0 0 2px rgba(255,255,255,.9); pointer-events:none; }
+    .hold-no { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font:700 calc(var(--hold-size,12px) * .5)/1 system-ui,sans-serif; color:#0f172a; text-shadow:0 0 2px rgba(255,255,255,.9); pointer-events:none; }
     .hold-tools .role-control { flex:1 1 160px; }
     .hold-tools { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px; }
     .hold-tools .size-control { flex:1 1 180px; display:flex; align-items:center; gap:9px; font-size:13px; color:#374151; }
@@ -194,8 +194,8 @@
               <select id="holdRole"><option value="normal">일반 홀드</option><option value="start">스타트 홀드</option><option value="finish">완등 홀드</option></select>
             </label>
             <label class="size-control" for="holdSize">
-              <span id="holdSizeLabel">새 포인트 크기</span> <strong id="holdSizeValue">22px</strong>
-              <input id="holdSize" type="range" min="10" max="60" step="2" value="22" />
+              <span id="holdSizeLabel">새 포인트 크기</span> <strong id="holdSizeValue">12px</strong>
+              <input id="holdSize" type="range" min="4" max="60" step="2" value="12" />
             </label>
           </div>
           <p class="muted">일반 홀드는 파란색, 스타트는 초록색, 완등은 핑크색입니다. 이미 찍은 포인트를 눌러 선택하면 해당 포인트만 종류와 크기를 바꾸거나 끌어서 옮길 수 있습니다.</p>
@@ -262,13 +262,14 @@
 
   // ───────── 상수 ─────────
   const ADMIN_EMAIL = "superb@superb.com";
-  const DEFAULT_HOLD_SIZE = 22;
+  const DEFAULT_HOLD_SIZE = 12;
   const DEFAULT_ROLE = "normal";
   const ROLE_NAMES = { normal: "일반", start: "스타트", finish: "완등" };
   // 홀드 색: 화면(CSS 변수)과 사진 다운로드(canvas)가 같은 값을 씁니다.
-  const HOLD_COLORS = { normal: "rgba(96,190,255,.85)", start: "rgba(110,255,160,.85)", finish: "rgba(255,130,210,.85)" };
-  // 사진 기본 필터: 화면과 다운로드가 같은 밝기/채도를 씁니다.
-  const PHOTO_FILTER = { brightness: 0.8, saturation: 0.7 };
+  const HOLD_COLORS = { normal: "rgba(160,215,255,.9)", start: "rgba(110,255,160,.85)", finish: "rgba(255,130,210,.85)" };
+  // 사진 보정: 밝기는 고정값, 채도(%)와 흰색 배경 투명도(%)는 문제마다 저장되어 화면과 다운로드에 같이 적용됩니다.
+  const PHOTO_BRIGHTNESS = 0.8;
+  const DEFAULT_PHOTO = { saturation: 70, veilTransparency: 100 };
   const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;  // 선택 가능한 원본 사진 최대 크기
   const TARGET_IMAGE_BYTES = 600 * 1024;     // 압축 목표 (Firestore 문서 1MiB 제한 대비)
   const MAX_IMAGE_DOC_BYTES = 1000000;       // 사진 문서 저장 상한
@@ -287,6 +288,8 @@
   const inlineImage = p => p.imageDataUrl || p.imageUrl || "";
   const hasPhoto = p => Boolean(inlineImage(p) || p.hasImage);
   const findProblem = id => state.problems.find(item => item.id === id);
+  // 문제에 저장된 사진 보정값. 예전 문제(저장값 없음)는 기본값을 씁니다.
+  const photoSettingsOf = p => ({ ...DEFAULT_PHOTO, ...(p.photo || {}) });
 
   const state = {
     user: null, isAdmin: false, problems: [], listType: "bouldering", detailId: "",
@@ -300,8 +303,8 @@
   // 색과 필터 값을 CSS 변수로 넘겨서 화면과 다운로드가 한 곳의 값을 쓰게 합니다.
   const rootStyle = document.documentElement.style;
   Object.entries(HOLD_COLORS).forEach(([role, color]) => rootStyle.setProperty(`--hold-${role}`, color));
-  rootStyle.setProperty("--photo-bright", String(PHOTO_FILTER.brightness));
-  rootStyle.setProperty("--photo-sat", String(PHOTO_FILTER.saturation));
+  rootStyle.setProperty("--photo-bright", String(PHOTO_BRIGHTNESS));
+  rootStyle.setProperty("--photo-sat", String(DEFAULT_PHOTO.saturation / 100));
 
   function grades(type) {
     return type === "bouldering"
@@ -424,6 +427,11 @@
       wall.prepend(img);
     }
   }
+  // 사진 보정값을 벽(채도 CSS 변수)과 흰색 배경 요소(불투명도)에 적용합니다. 편집 화면과 상세 화면이 같은 함수를 씁니다.
+  function applyPhotoSettings(wall, veil, { saturation, veilTransparency }) {
+    wall.style.setProperty("--photo-sat", String(saturation / 100));
+    veil.style.opacity = String(1 - veilTransparency / 100);
+  }
 
   // ───────── 화면 전환 / 로그인 상태 ─────────
   function switchScreen(screen) {
@@ -477,13 +485,17 @@
   });
   // 관리자 편집 화면의 사진 채도/투명도 조절. 값은 편집 벽 요소의 CSS 변수로 전달합니다.
   // 흰색 배경(photoVeil)은 사진 위에 깔리며, 투명도 100%일 때 완전히 투명해서 원본 사진이 보입니다.
+  const editorPhotoSettings = () => ({ saturation: Number($("photoSat").value), veilTransparency: Number($("photoVeilTransparency").value) });
+  function setEditorPhotoSettings({ saturation, veilTransparency }) {
+    $("photoSat").value = String(saturation);
+    $("photoVeilTransparency").value = String(veilTransparency);
+    applyPhotoStyle();
+  }
   function applyPhotoStyle() {
-    const sat = Number($("photoSat").value);
-    const transparency = Number($("photoVeilTransparency").value);
-    $("photoSatValue").textContent = `${sat}%`;
-    $("photoVeilTransparencyValue").textContent = `${transparency}%`;
-    $("editorWall").style.setProperty("--photo-sat", String(sat / 100));
-    $("photoVeil").style.opacity = String(1 - transparency / 100);
+    const settings = editorPhotoSettings();
+    $("photoSatValue").textContent = `${settings.saturation}%`;
+    $("photoVeilTransparencyValue").textContent = `${settings.veilTransparency}%`;
+    applyPhotoSettings($("editorWall"), $("photoVeil"), settings);
   }
   onInput($("photoSat"), applyPhotoStyle);
   onInput($("photoVeilTransparency"), applyPhotoStyle);
@@ -632,7 +644,8 @@
 
       btn.textContent = "Firestore 저장 중…";
       setMessage("saveMessage", "문제 정보를 저장하고 있습니다…");
-      const base = { name, type, grade, holds: state.holds.map(normalizeHold) };
+      // 사진 보정값(채도, 흰색 배경 투명도)도 함께 저장해 보는 사람 모두 같은 모습으로 봅니다.
+      const base = { name, type, grade, holds: state.holds.map(normalizeHold), photo: editorPhotoSettings() };
       const edit = state.editingProblem;
       if (edit) {
         // 문제변경: 같은 id 문서를 덮어씁니다. 새 사진을 고르지 않았으면 기존 사진을 그대로 유지합니다.
@@ -727,10 +740,11 @@
 
   // ───────── 문제 편집(새로 만들기 / 문제변경) ─────────
   // 편집 화면의 홀드와 사진 입력을 초기화합니다. holds, imageUrl을 주면 그 값으로 채웁니다.
-  function fillEditor({ holds = [], imageUrl = "" } = {}) {
+  function fillEditor({ holds = [], imageUrl = "", photo = DEFAULT_PHOTO } = {}) {
     state.holds = holds; state.selectedHoldIndex = -1; state.newHoldRole = DEFAULT_ROLE; state.holdSize = DEFAULT_HOLD_SIZE;
     state.wallFile = null; clearWallPreview(); $("wallFile").value = ""; $("holdRole").value = DEFAULT_ROLE;
     setWallImage($("editorWall"), imageUrl);
+    setEditorPhotoSettings(photo);
     refreshEditor(); renderEditorMode();
   }
   // 문제변경: 선택한 문제를 편집 화면에 불러와 같은 문제를 수정합니다.
@@ -752,7 +766,7 @@
     $("problemType").value = p.type || "bouldering";
     updateEditorGrades();
     $("problemGrade").value = p.grade || "";
-    fillEditor({ holds: (p.holds || []).map(normalizeHold), imageUrl: image || p.imageUrl || "" });
+    fillEditor({ holds: (p.holds || []).map(normalizeHold), imageUrl: image || p.imageUrl || "", photo: photoSettingsOf(p) });
     setMessage("saveMessage", `'${p.name || "문제"}'을(를) 수정 중입니다. 고친 뒤 '수정 저장하기'를 누르세요.`);
     switchScreen("create");
   }
@@ -817,6 +831,11 @@
     $("detailMeta").textContent = `${typeName(p.type)} · ${p.grade || "-"} · 홀드 ${(p.holds || []).length}개`;
     const wall = $("detailWall");
     wall.innerHTML = "";
+    // 편집 때 정한 채도와 흰색 배경을 상세 화면에도 같은 모습으로 적용합니다.
+    const veil = document.createElement("div");
+    veil.className = "photo-veil"; veil.setAttribute("aria-hidden", "true");
+    wall.appendChild(veil);
+    applyPhotoSettings(wall, veil, photoSettingsOf(p));
     // 상세를 열 때마다 기본 화면(어둡게 보기)으로 되돌립니다.
     setOriginalPhoto(false);
     // 사진이 있는 문제만 다운로드 버튼을 보여줍니다.
@@ -835,10 +854,12 @@
     }
   }
   // 화면의 사진 필터(밝기, 채도)를 캔버스 픽셀에 직접 적용합니다. 브라우저마다 ctx.filter 지원이 달라 직접 계산합니다.
-  function applyPhotoFilter(ctx, width, height) {
+  function applyPhotoFilter(ctx, width, height, { saturation, veilTransparency }) {
     const imageData = ctx.getImageData(0, 0, width, height);
     const d = imageData.data;
-    const s = PHOTO_FILTER.saturation, bright = PHOTO_FILTER.brightness;
+    const s = saturation / 100, bright = PHOTO_BRIGHTNESS;
+    // 흰색 배경을 덮은 것과 같은 효과: 필터를 거친 색을 흰색 쪽으로 veil 만큼 섞습니다.
+    const veil = 1 - veilTransparency / 100, keep = 1 - veil, white = 255 * veil;
     const m = [
       0.213 + 0.787 * s, 0.715 - 0.715 * s, 0.072 - 0.072 * s,
       0.213 - 0.213 * s, 0.715 + 0.285 * s, 0.072 - 0.072 * s,
@@ -847,9 +868,9 @@
     const clamp255 = v => Math.max(0, Math.min(255, Math.round(v)));
     for (let i = 0; i < d.length; i += 4) {
       const r = d[i] * bright, g = d[i + 1] * bright, b = d[i + 2] * bright;
-      d[i] = clamp255(m[0] * r + m[1] * g + m[2] * b);
-      d[i + 1] = clamp255(m[3] * r + m[4] * g + m[5] * b);
-      d[i + 2] = clamp255(m[6] * r + m[7] * g + m[8] * b);
+      d[i] = clamp255((m[0] * r + m[1] * g + m[2] * b) * keep + white);
+      d[i + 1] = clamp255((m[3] * r + m[4] * g + m[5] * b) * keep + white);
+      d[i + 2] = clamp255((m[6] * r + m[7] * g + m[8] * b) * keep + white);
     }
     ctx.putImageData(imageData, 0, 0);
   }
@@ -861,7 +882,9 @@
     ctx.shadowColor = "rgba(0,0,0,.28)";
     ctx.shadowBlur = 6 * scale;
     ctx.shadowOffsetY = 1 * scale;
-    ctx.beginPath(); ctx.arc(cx, cy, r + 2 * scale, 0, Math.PI * 2);
+    // 흰 테두리 두께도 홀드 크기에 비례시켜, 작은 홀드에서 테두리가 색을 밝게 덮지 않도록 합니다. 화면의 CSS와 같은 비율입니다.
+    const ring = Math.max(scale, size * 0.1);
+    ctx.beginPath(); ctx.arc(cx, cy, r + ring, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(255,255,255,.95)"; ctx.fill();
     ctx.shadowColor = "transparent";
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -898,17 +921,24 @@
       return;
     }
     try {
-      const photo = new Image();
-      photo.src = src;
-      await photo.decode();
+      // decode() 대신 onload를 씁니다. 일부 브라우저에서 data URL의 decode()가 끝나지 않는 경우가 있어서입니다.
+      const photo = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("사진 데이터를 읽지 못했습니다."));
+        img.src = src;
+      });
       const canvas = document.createElement("canvas");
       canvas.width = photo.naturalWidth;
       canvas.height = photo.naturalHeight;
       const ctx = canvas.getContext("2d");
       ctx.drawImage(photo, 0, 0);
-      applyPhotoFilter(ctx, canvas.width, canvas.height);
+      applyPhotoFilter(ctx, canvas.width, canvas.height, photoSettingsOf(p));
       // 화면에 보이는 벽 크기와 원본 사진 크기의 비율로 홀드 크기를 맞춥니다.
-      const scale = photo.naturalWidth / wall.getBoundingClientRect().width;
+      // 레이아웃이 아직 잡히지 않아 너비를 못 읽으면 상세 창의 기본 너비(최대 720px, 안쪽 여백 제외)로 대신합니다.
+      const measured = Math.max(wall.getBoundingClientRect().width, wall.clientWidth);
+      const wallWidth = measured >= 50 ? measured : Math.min(window.innerWidth, 720) - 36;
+      const scale = photo.naturalWidth / wallWidth;
       const showNumbers = p.type === "endurance";
       let sequence = 0;
       (p.holds || []).forEach(hold => {
