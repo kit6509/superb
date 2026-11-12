@@ -112,10 +112,19 @@
     .modal-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
     .modal-head h2 { font-size:18px; margin:0; }
     .close { border:0; width:36px; height:36px; border-radius:50%; background:#e5e7eb; color:#374151; font-size:20px; }
-    .zoom-bar { display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:10px; }
+    .zoom-bar { display:none; align-items:center; justify-content:center; gap:8px; margin-bottom:10px; }
     .zoom-bar .btn { min-width:44px; }
     .zoom-label { min-width:56px; text-align:center; font-weight:700; font-size:14px; }
-    .zoom-view { overflow:hidden; border-radius:14px; touch-action:none; }
+    .zoom-view { overflow:hidden; border-radius:14px; }
+    .full-view { position:fixed; inset:0; z-index:30; background:#0b0f19; display:flex; flex-direction:column; padding:10px 12px; box-sizing:border-box; }
+    .full-top { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:4px 2px 8px; }
+    .full-top h3 { margin:0; font-size:16px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .full-stage { flex:1; min-height:0; display:flex; flex-direction:column; }
+    .full-stage .zoom-home { flex:1; min-height:0; display:flex; flex-direction:column; }
+    .full-stage .zoom-view { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; touch-action:none; }
+    .full-stage .wall { flex:none; }
+    .full-stage .zoom-bar { display:flex; margin-bottom:8px; }
+    .full-stage .zoom-label { color:#fff; }
     .small { font-size:11px; color:var(--muted); }
     @media (min-width:600px) {
       main { padding:22px; }
@@ -252,7 +261,10 @@
     <div class="detail-photo-actions">
       <button id="detailOriginalBtn" class="btn secondary" type="button" aria-pressed="false">사진 원본보기</button>
       <button id="detailDownloadBtn" class="btn secondary" type="button">사진 다운로드</button>
+      <button id="fullOpenBtn" class="btn secondary" type="button">크게 보기</button>
     </div>
+    <div id="zoomSlot">
+    <div id="zoomHome" class="zoom-home">
     <div class="zoom-bar">
       <button id="zoomOutBtn" class="btn secondary compact" type="button" aria-label="축소">−</button>
       <span id="zoomLabel" class="zoom-label">100%</span>
@@ -262,7 +274,17 @@
     <div id="detailZoomView" class="zoom-view">
       <div id="detailWall" class="wall"></div>
     </div>
+    </div>
+    </div>
   </div>
+</div>
+
+<div id="fullView" class="full-view hidden" role="dialog" aria-modal="true" aria-label="사진 크게 보기">
+  <div class="full-top">
+    <h3 id="fullTitle"></h3>
+    <button id="fullCloseBtn" class="close" type="button" aria-label="닫기">×</button>
+  </div>
+  <div id="fullStage" class="full-stage"></div>
 </div>
 
 <script type="module">
@@ -1121,11 +1143,16 @@
   }
   // 휴대폰/브라우저 뒤로가기는 상세만 닫고 앱 화면은 그대로 둡니다.
   window.addEventListener("popstate", () => {
-    if (!$("detailBackdrop").classList.contains("hidden")) closeDetailView();
+    if (isFullOpen()) closeFullView();
+    else if (!$("detailBackdrop").classList.contains("hidden")) closeDetailView();
   });
   $("closeDetail").addEventListener("click", hideDetail);
   $("detailBackdrop").addEventListener("click", e => { if (e.target === e.currentTarget) hideDetail(); });
-  document.addEventListener("keydown", e => { if (e.key === "Escape") hideDetail(); });
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    if (isFullOpen()) hideFullView();
+    else hideDetail();
+  });
 
   // ───────── 상세 사진 확대/축소 ─────────
   // 버튼(+, −), 두 손가락 핀치, 확대된 상태에서 드래그로 이동, PC는 마우스 휠을 지원합니다.
@@ -1152,6 +1179,7 @@
 
   const zoomView = $("detailZoomView");
   zoomView.addEventListener("pointerdown", e => {
+    if (!isFullOpen()) return;  // 작은 상세 창에서는 확대/축소를 쓰지 않습니다.
     zoomView.setPointerCapture(e.pointerId);
     zoomPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (zoomPointers.size === 2) {
@@ -1186,9 +1214,51 @@
   zoomView.addEventListener("pointerup", endZoomPointer);
   zoomView.addEventListener("pointercancel", endZoomPointer);
   zoomView.addEventListener("wheel", e => {
+    if (!isFullOpen()) return;
     e.preventDefault();
     setZoom(zoom.scale * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
   }, { passive: false });
+
+  // ───────── 사진 크게 보기(전체 화면) ─────────
+  // 확대/축소 영역을 전체 화면 층으로 옮겨 쓰고, 닫으면 원래 자리로 돌려놓습니다.
+  let fullHistoryPushed = false;
+  const isFullOpen = () => !$("fullView").classList.contains("hidden");
+  // 사진이 화면 안에 전부 들어가도록 크기를 맞춥니다. 비율은 사진 비율을 그대로 써서 홀드 위치가 어긋나지 않게 합니다.
+  function fitFullWall() {
+    const wall = $("detailWall"), view = $("detailZoomView");
+    const m = wall.style.aspectRatio.match(/([\d.]+)\s*\/\s*([\d.]+)/);
+    const ratio = m ? Number(m[1]) / Number(m[2]) : 4 / 5;
+    let w = view.clientWidth, h = w / ratio;
+    if (h > view.clientHeight) { h = view.clientHeight; w = h * ratio; }
+    wall.style.width = `${Math.floor(w)}px`;
+    wall.style.height = `${Math.floor(h)}px`;
+  }
+  function openFullView() {
+    $("fullTitle").textContent = $("detailTitle").textContent;
+    $("fullView").classList.remove("hidden");
+    $("fullStage").appendChild($("zoomHome"));
+    fitFullWall();
+    setZoom(1);
+    if (!fullHistoryPushed) { history.pushState({ climbFull: true }, ""); fullHistoryPushed = true; }
+  }
+  function closeFullView() {
+    $("fullView").classList.add("hidden");
+    $("zoomSlot").appendChild($("zoomHome"));
+    $("detailWall").style.width = "";
+    $("detailWall").style.height = "";
+    setZoom(1);
+    fullHistoryPushed = false;
+  }
+  // 닫기 버튼과 Esc는 기록을 되돌려서 닫습니다. 뒤로가기는 popstate에서 같은 처리를 합니다.
+  function hideFullView() {
+    if (fullHistoryPushed) history.back();
+    else closeFullView();
+  }
+  $("fullOpenBtn").addEventListener("click", openFullView);
+  $("fullCloseBtn").addEventListener("click", hideFullView);
+  window.addEventListener("resize", () => {
+    if (isFullOpen()) { fitFullWall(); setZoom(zoom.scale); }
+  });
 
   // ───────── 시작 ─────────
   onAuthStateChanged(auth, user => {
