@@ -115,7 +115,7 @@
     .zoom-bar { display:none; align-items:center; justify-content:center; gap:8px; margin-bottom:10px; }
     .zoom-bar .btn { min-width:44px; }
     .zoom-label { min-width:56px; text-align:center; font-weight:700; font-size:14px; }
-    .zoom-view { overflow:hidden; border-radius:14px; }
+    .zoom-view { overflow:hidden; border-radius:14px; cursor:zoom-in; }
     .full-view { position:fixed; inset:0; z-index:30; background:#0b0f19; display:flex; flex-direction:column; padding:10px 12px; box-sizing:border-box; }
     .full-top { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:4px 2px 8px; }
     .full-top h3 { margin:0; font-size:16px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -261,7 +261,6 @@
     <div class="detail-photo-actions">
       <button id="detailOriginalBtn" class="btn secondary" type="button" aria-pressed="false">사진 원본보기</button>
       <button id="detailDownloadBtn" class="btn secondary" type="button">사진 다운로드</button>
-      <button id="fullOpenBtn" class="btn secondary" type="button">크게 보기</button>
     </div>
     <div id="zoomSlot">
     <div id="zoomHome" class="zoom-home">
@@ -1254,7 +1253,8 @@
     if (fullHistoryPushed) history.back();
     else closeFullView();
   }
-  $("fullOpenBtn").addEventListener("click", openFullView);
+  // 작은 상세 창에서 사진을 누르면 크게 보기 화면이 뜹니다. 드래그로 스크롤한 경우에는 click이 발생하지 않습니다.
+  $("detailZoomView").addEventListener("click", () => { if (!isFullOpen()) openFullView(); });
   $("fullCloseBtn").addEventListener("click", hideFullView);
   window.addEventListener("resize", () => {
     if (isFullOpen()) { fitFullWall(); setZoom(zoom.scale); }
