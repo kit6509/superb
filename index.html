@@ -107,15 +107,18 @@
     .message { margin:10px 0; font-size:13px; line-height:1.5; }
     .message.error { color:#dc2626; }
     .message.success { color:#15803d; }
-    .modal-backdrop { position:fixed; inset:0; z-index:10; background:rgba(15,23,42,.6); display:flex; align-items:flex-end; justify-content:center; padding:12px; }
+    .modal-backdrop { position:fixed; inset:0; z-index:10; background:rgba(15,23,42,.6); display:flex; align-items:center; justify-content:center; padding:12px; }
     .modal { width:100%; max-width:720px; max-height:92vh; overflow:auto; border-radius:20px; background:var(--bg); padding:18px; }
     .modal-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
     .modal-head h2 { font-size:18px; margin:0; }
     .close { border:0; width:36px; height:36px; border-radius:50%; background:#e5e7eb; color:#374151; font-size:20px; }
+    .zoom-bar { display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:10px; }
+    .zoom-bar .btn { min-width:44px; }
+    .zoom-label { min-width:56px; text-align:center; font-weight:700; font-size:14px; }
+    .zoom-view { overflow:hidden; border-radius:14px; touch-action:none; }
     .small { font-size:11px; color:var(--muted); }
     @media (min-width:600px) {
       main { padding:22px; }
-      .modal-backdrop { align-items:center; }
       .wall { aspect-ratio:1/1; }
     }
   </style>
@@ -248,8 +251,17 @@
     </div>
     <div class="detail-photo-actions">
       <button id="detailOriginalBtn" class="btn secondary" type="button" aria-pressed="false">사진 원본보기</button>
-      <button id="detailDownloadBtn" class="btn secondary" type="button">사진 다운로드</button>    </div>
-    <div id="detailWall" class="wall"></div>
+      <button id="detailDownloadBtn" class="btn secondary" type="button">사진 다운로드</button>
+    </div>
+    <div class="zoom-bar">
+      <button id="zoomOutBtn" class="btn secondary compact" type="button" aria-label="축소">−</button>
+      <span id="zoomLabel" class="zoom-label">100%</span>
+      <button id="zoomInBtn" class="btn secondary compact" type="button" aria-label="확대">+</button>
+      <button id="zoomResetBtn" class="btn secondary compact" type="button">원래 크기</button>
+    </div>
+    <div id="detailZoomView" class="zoom-view">
+      <div id="detailWall" class="wall"></div>
+    </div>
   </div>
 </div>
 
@@ -974,10 +986,13 @@
     applyPhotoSettings(wall, veil, photoSettingsOf(p));
     // 상세를 열 때마다 기본 화면(어둡게 보기)으로 되돌립니다.
     setOriginalPhoto(false);
+    setZoom(1);
     // 사진이 있는 문제만 다운로드 버튼을 보여줍니다.
     $("detailDownloadBtn").classList.toggle("hidden", !hasPhoto(p));
     setWallImage(wall, inlineImage(p));
     renderHolds(wall, p.holds || [], false, p.type === "endurance");
+    // 뒤로가기 한 번이 상세만 닫도록 기록을 하나 쌓아 둡니다.
+    if (!detailHistoryPushed) { history.pushState({ climbDetail: true }, ""); detailHistoryPushed = true; }
     $("detailBackdrop").classList.remove("hidden");
     // 새로 저장된 문제는 사진을 상세를 열 때만 따로 가져옵니다. 예전 문제는 위에서 바로 표시됩니다.
     if (!inlineImage(p) && p.hasImage) {
@@ -1094,10 +1109,86 @@
     }
   });
   $("detailOriginalBtn").addEventListener("click", () => setOriginalPhoto(!$("detailWall").classList.contains("original-photo")));
-  const hideDetail = () => $("detailBackdrop").classList.add("hidden");
+  // 상세 닫기: 뒤로가기와 같은 동작을 위해, 쌓아 둔 기록이 있으면 그 기록을 되돌려서 닫습니다.
+  let detailHistoryPushed = false;
+  function closeDetailView() {
+    $("detailBackdrop").classList.add("hidden");
+    detailHistoryPushed = false;
+  }
+  function hideDetail() {
+    if (detailHistoryPushed) history.back();
+    else closeDetailView();
+  }
+  // 휴대폰/브라우저 뒤로가기는 상세만 닫고 앱 화면은 그대로 둡니다.
+  window.addEventListener("popstate", () => {
+    if (!$("detailBackdrop").classList.contains("hidden")) closeDetailView();
+  });
   $("closeDetail").addEventListener("click", hideDetail);
   $("detailBackdrop").addEventListener("click", e => { if (e.target === e.currentTarget) hideDetail(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape") hideDetail(); });
+
+  // ───────── 상세 사진 확대/축소 ─────────
+  // 버튼(+, −), 두 손가락 핀치, 확대된 상태에서 드래그로 이동, PC는 마우스 휠을 지원합니다.
+  const ZOOM_MIN = 1, ZOOM_MAX = 4;
+  const zoom = { scale: 1, x: 0, y: 0 };
+  const zoomPointers = new Map();
+  let pinchStart = null; // { dist, scale }
+  let panStart = null;   // { x, y, px, py }
+  const clampRange = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  function setZoom(scale) {
+    zoom.scale = clampRange(scale, ZOOM_MIN, ZOOM_MAX);
+    const wall = $("detailWall");
+    // 사진 밖으로 너무 밀려 나가지 않도록 이동 범위를 제한합니다.
+    const maxX = (zoom.scale - 1) * wall.offsetWidth / 2, maxY = (zoom.scale - 1) * wall.offsetHeight / 2;
+    zoom.x = clampRange(zoom.x, -maxX, maxX);
+    zoom.y = clampRange(zoom.y, -maxY, maxY);
+    if (zoom.scale === 1) { zoom.x = 0; zoom.y = 0; }
+    wall.style.transform = `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})`;
+    $("zoomLabel").textContent = `${Math.round(zoom.scale * 100)}%`;
+  }
+  $("zoomInBtn").addEventListener("click", () => setZoom(zoom.scale * 1.25));
+  $("zoomOutBtn").addEventListener("click", () => setZoom(zoom.scale / 1.25));
+  $("zoomResetBtn").addEventListener("click", () => setZoom(1));
+
+  const zoomView = $("detailZoomView");
+  zoomView.addEventListener("pointerdown", e => {
+    zoomView.setPointerCapture(e.pointerId);
+    zoomPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (zoomPointers.size === 2) {
+      const [a, b] = [...zoomPointers.values()];
+      pinchStart = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, scale: zoom.scale };
+      panStart = null;
+    } else if (zoomPointers.size === 1 && zoom.scale > 1) {
+      panStart = { x: zoom.x, y: zoom.y, px: e.clientX, py: e.clientY };
+    }
+  });
+  zoomView.addEventListener("pointermove", e => {
+    if (!zoomPointers.has(e.pointerId)) return;
+    zoomPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinchStart && zoomPointers.size >= 2) {
+      const [a, b] = [...zoomPointers.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      setZoom(pinchStart.scale * dist / pinchStart.dist);
+    } else if (panStart && zoomPointers.size === 1) {
+      zoom.x = panStart.x + (e.clientX - panStart.px);
+      zoom.y = panStart.y + (e.clientY - panStart.py);
+      setZoom(zoom.scale);
+    }
+  });
+  const endZoomPointer = e => {
+    zoomPointers.delete(e.pointerId);
+    pinchStart = null; panStart = null;
+    if (zoomPointers.size === 1 && zoom.scale > 1) {
+      const [p] = zoomPointers.values();
+      panStart = { x: zoom.x, y: zoom.y, px: p.x, py: p.y };
+    }
+  };
+  zoomView.addEventListener("pointerup", endZoomPointer);
+  zoomView.addEventListener("pointercancel", endZoomPointer);
+  zoomView.addEventListener("wheel", e => {
+    e.preventDefault();
+    setZoom(zoom.scale * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
+  }, { passive: false });
 
   // ───────── 시작 ─────────
   onAuthStateChanged(auth, user => {
