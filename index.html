@@ -366,10 +366,12 @@
   rootStyle.setProperty("--photo-bright", String(PHOTO_BRIGHTNESS));
   rootStyle.setProperty("--photo-sat", String(DEFAULT_PHOTO.saturation / 100));
 
+  // 지구력 난이도: 클라이밍 Yosemite Decimal System 기준입니다. 5.10부터는 a~d가 붙습니다.
+  const ENDURANCE_GRADES = ["5.9", "5.10a", "5.10b", "5.10c", "5.10d", "5.11a", "5.11b", "5.11c", "5.11d", "5.12a", "5.12b", "5.12c", "5.12d"];
   function grades(type) {
     return type === "bouldering"
       ? Array.from({ length: 13 }, (_, i) => `V${i + 1}`)
-      : Array.from({ length: 10 }, (_, i) => String(i + 1));
+      : ENDURANCE_GRADES;
   }
   function typeName(type) { return type === "bouldering" ? "볼더링" : "지구력"; }
   // 출제일은 Firestore Timestamp(toDate) 또는 테스트용 숫자 시각을 받아 YYYY.MM.DD로 보여 줍니다.
@@ -494,9 +496,11 @@
       if (state.eraseMode) {
         state.holds.splice(index, 1);
         state.selectedHoldIndex = -1;
-      } else {
-        // 누를 때마다 종류가 바뀌고(일반 → 스타트 → 완등 → 일반), 그 홀드를 선택 상태로 둡니다.
+      } else if (index === state.selectedHoldIndex) {
+        // 이미 선택된 홀드를 한 번 더 누르면 종류가 바뀝니다(일반 → 스타트 → 완등 → 일반).
         state.holds[index].role = NEXT_ROLE[hold.role || DEFAULT_ROLE];
+      } else {
+        // 처음 누르면 선택만 합니다. 위치를 옮길 때 색이 바뀌지 않도록 색은 그대로 둡니다.
         state.selectedHoldIndex = index;
         state.holdSize = hold.size || DEFAULT_HOLD_SIZE;
       }
