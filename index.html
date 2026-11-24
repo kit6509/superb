@@ -69,11 +69,12 @@
     /* 선택한 홀드 가장자리의 작은 크기 손잡이(단색). 한 손가락으로 끌면 홀드 크기가 바뀝니다. 터치 영역은 보이는 크기보다 넓게 잡습니다. */
     .size-handle { position:absolute; width:7px; height:7px; margin:-3.5px 0 0 -3.5px; border-radius:50%; background:#f59e0b; z-index:5; cursor:nwse-resize; }
     .size-handle::before { content:""; position:absolute; inset:-5px; }
-    .hold-legend { display:flex; justify-content:center; align-items:center; gap:12px; margin-top:8px; font-size:12.5px; font-weight:600; color:#374151; white-space:nowrap; }
+    .hold-legend { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:6px 12px; margin-top:8px; font-size:12.5px; font-weight:600; color:#374151; }
     .legend-item { display:inline-flex; align-items:center; gap:5px; }
     .legend-dot { width:12px; height:12px; border-radius:50%; background:var(--hold-normal); box-shadow:0 0 0 1px #fff, 0 1px 3px rgba(0,0,0,.3); }
     .legend-dot.start { background:var(--hold-start); }
     .legend-dot.finish { background:var(--hold-finish); }
+    .legend-dot.leg { background:var(--hold-leg); }
     .wall.original-photo img.wall-image { filter:none; }
     .detail-photo-actions { display:flex; gap:8px; margin-bottom:10px; }
     .detail-photo-actions .btn { flex:1; }
@@ -82,6 +83,7 @@
     .hold::before { content:""; position:absolute; inset:-6px; border-radius:50%; }
     .hold.start { background:var(--hold-start, rgba(110,255,160,.7)); }
     .hold.finish { background:var(--hold-finish, rgba(255,130,210,.7)); }
+    .hold.leg { background:var(--hold-leg, rgba(251,146,60,.8)); }
     .hold.selected { outline:1.5px solid #f59e0b; outline-offset:2px; z-index:4; }
     .hold-no { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font:700 calc(var(--hold-size,12px) * .5)/1 system-ui,sans-serif; color:#0f172a; text-shadow:0 0 2px rgba(255,255,255,.9); pointer-events:none; }
     .hold-tools { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px; }
@@ -212,6 +214,7 @@
             <span class="legend-item"><span class="legend-dot"></span>일반홀드</span>
             <span class="legend-item"><span class="legend-dot start"></span>스타트홀드</span>
             <span class="legend-item"><span class="legend-dot finish"></span>완등홀드</span>
+            <span class="legend-item"><span class="legend-dot leg"></span>다리홀드</span>
           </div>
           <div class="photo-tools">
             <label class="size-control" for="photoVeilTransparency">
@@ -226,8 +229,8 @@
           </div>
           <div class="hold-tools">
             <label class="size-control" for="holdSize">
-              <span id="holdSizeLabel">새 포인트 크기</span> <strong id="holdSizeValue">14px</strong>
-              <input id="holdSize" type="range" min="4" max="60" step="2" value="14" />
+              <span id="holdSizeLabel">새 포인트 크기</span> <strong id="holdSizeValue">10px</strong>
+              <input id="holdSize" type="range" min="4" max="20" step="2" value="10" />
             </label>
           </div>
         </div>
@@ -322,13 +325,13 @@
   const ADMIN_EMAIL = "superb@superb.com";
   // 로그인 아이디가 @ 없이 입력되면 이 도메인을 붙여 이메일 계정으로 바꿉니다. (예: superb → superb@superb.com)
   const ADMIN_DOMAIN = "superb.com";
-  const DEFAULT_HOLD_SIZE = 14;
+  const DEFAULT_HOLD_SIZE = 10;
   const DEFAULT_ROLE = "normal";
-  const ROLE_NAMES = { normal: "일반", start: "스타트", finish: "완등" };
+  const ROLE_NAMES = { normal: "일반", start: "스타트", finish: "완등", leg: "다리" };
   // 홀드 색: 화면(CSS 변수)과 사진 다운로드(canvas)가 같은 값을 씁니다.
-  const HOLD_COLORS = { normal: "rgba(160,215,255,.75)", start: "rgba(110,255,160,.7)", finish: "rgba(255,130,210,.7)" };
+  const HOLD_COLORS = { normal: "rgba(160,215,255,.75)", start: "rgba(110,255,160,.7)", finish: "rgba(255,130,210,.7)", leg: "rgba(251,146,60,.8)" };
   // 홀드를 누를 때마다 바뀌는 순서: 일반(파랑) → 스타트(초록) → 완등 → 일반(파랑)
-  const NEXT_ROLE = { normal: "start", start: "finish", finish: "normal" };
+  const NEXT_ROLE = { normal: "start", start: "finish", finish: "leg", leg: "normal" };
   // 사진 보정: 밝기와 채도는 고정값이고, 흰색 배경 투명도(%)만 문제마다 저장되어 화면과 다운로드에 같이 적용됩니다.
   const PHOTO_BRIGHTNESS = 0.8;
   const DEFAULT_PHOTO = { saturation: 70, veilTransparency: 70 };
@@ -622,7 +625,7 @@
     $("holdSizeValue").textContent = `${state.holdSize}px`;
   });
   // 선택한 홀드의 크기를 바꿉니다. 슬라이더, 손잡이 드래그가 같은 4~60px 범위를 씁니다.
-  const HOLD_SIZE_MIN = 4, HOLD_SIZE_MAX = 60;
+  const HOLD_SIZE_MIN = 4, HOLD_SIZE_MAX = 20;
   function setSelectedHoldSize(size) {
     const index = state.selectedHoldIndex;
     if (index < 0 || !state.holds[index]) return;
@@ -963,7 +966,8 @@
         ${actions}
       </article>`;
   }
-  function renderProblemList() {
+  // 지금 필터와 정렬이 적용된 문제 목록입니다. 목록 화면과 상세 화면의 좌우 넘기기가 같은 순서를 씁니다.
+  function visibleProblems() {
     const values = grades(state.listType);
     const from = $("gradeFrom").value, to = $("gradeTo").value;
     // 시작이 끝보다 뒤로 선택되어도 범위가 맞도록 두 값을 바꿔서 봅니다.
@@ -981,6 +985,10 @@
     // 난이도 오름차순으로 정렬합니다. 같은 등급끼리는 기존 순서(최신순)를 유지하고, 등급 목록에 없는 문제는 맨 뒤로 보냅니다.
     const rankOf = p => { const i = values.indexOf(p.grade); return i < 0 ? values.length : i; };
     filtered.sort((a, b) => rankOf(a) - rankOf(b));
+    return filtered;
+  }
+  function renderProblemList() {
+    const filtered = visibleProblems();
     $("problemList").innerHTML = filtered.length
       ? filtered.map(renderCard).join("")
       : '<div class="panel empty">조건에 맞는 문제가 없습니다.<br>첫 번째 문제를 등록해 보세요!</div>';
@@ -1251,6 +1259,35 @@
     if (isFullOpen()) hideFullView();
     else hideDetail();
   });
+
+  // ───────── 상세 화면 좌우 넘기기 ─────────
+  // 왼쪽으로 밀면 다음 문제, 오른쪽으로 밀면 이전 문제를 보여 줍니다. 목록의 처음과 끝에서는 넘어가지 않습니다.
+  // 사진 확대 중이거나 두 손가락 동작이면 무시합니다. 세로 스크롤과 헷갈리지 않도록 가로 이동이 충분히 클 때만 넘깁니다.
+  const SWIPE_MIN_PX = 60;
+  let swipeStart = null;
+  function goNeighborProblem(step) {
+    const list = visibleProblems();
+    const i = list.findIndex(p => p.id === state.detailId);
+    const next = i >= 0 ? list[i + step] : null;
+    if (!next) return; // 처음이나 끝이면 그대로 둡니다.
+    showDetail(next.id);
+  }
+  const detailBackdrop = $("detailBackdrop");
+  detailBackdrop.addEventListener("touchstart", e => {
+    swipeStart = e.touches.length === 1 && !isFullOpen()
+      ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+      : null;
+  }, { passive: true });
+  detailBackdrop.addEventListener("touchcancel", () => { swipeStart = null; }, { passive: true });
+  detailBackdrop.addEventListener("touchend", e => {
+    const start = swipeStart;
+    swipeStart = null;
+    if (!start || isFullOpen() || e.changedTouches.length !== 1) return;
+    const dx = e.changedTouches[0].clientX - start.x;
+    const dy = e.changedTouches[0].clientY - start.y;
+    if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    goNeighborProblem(dx < 0 ? 1 : -1);
+  }, { passive: true });
 
   // ───────── 상세 사진 확대/축소 ─────────
   // 버튼(+, −), 두 손가락 핀치, 확대된 상태에서 드래그로 이동, PC는 마우스 휠을 지원합니다.
