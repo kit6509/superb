@@ -68,7 +68,7 @@
     #editorWall { touch-action:pan-x pan-y pinch-zoom; }
     /* 선택한 홀드 가장자리의 작은 크기 손잡이(단색). 한 손가락으로 끌면 홀드 크기가 바뀝니다. 터치 영역은 보이는 크기보다 넓게 잡습니다. */
     .size-handle { position:absolute; width:7px; height:7px; margin:-3.5px 0 0 -3.5px; border-radius:50%; background:#f59e0b; z-index:5; cursor:nwse-resize; }
-    .size-handle::before { content:""; position:absolute; inset:-8px; }
+    .size-handle::before { content:""; position:absolute; inset:-5px; }
     .hold-legend { display:flex; justify-content:center; align-items:center; gap:12px; margin-top:8px; font-size:12.5px; font-weight:600; color:#374151; white-space:nowrap; }
     .legend-item { display:inline-flex; align-items:center; gap:5px; }
     .legend-dot { width:12px; height:12px; border-radius:50%; background:var(--hold-normal); box-shadow:0 0 0 1px #fff, 0 1px 3px rgba(0,0,0,.3); }
@@ -78,6 +78,8 @@
     .detail-photo-actions { display:flex; gap:8px; margin-bottom:10px; }
     .detail-photo-actions .btn { flex:1; }
     .hold { position:absolute; width:var(--hold-size,12px); height:var(--hold-size,12px); border:min(3px, calc(var(--hold-size,12px) * .15)) solid transparent; border-radius:50%; background:var(--hold-normal, rgba(160,215,255,.75)); transform:translate(-50%,-50%); box-shadow:0 0 0 max(1px, calc(var(--hold-size,12px) * .1)) rgba(255,255,255,.95),0 1px 6px rgba(0,0,0,.28); pointer-events:auto; cursor:pointer; padding:0; z-index:2; }
+    /* 손가락으로 누르기 쉽도록 보이지 않는 터치 영역을 홀드 바깥으로 6px씩 넓힙니다. */
+    .hold::before { content:""; position:absolute; inset:-6px; border-radius:50%; }
     .hold.start { background:var(--hold-start, rgba(110,255,160,.7)); }
     .hold.finish { background:var(--hold-finish, rgba(255,130,210,.7)); }
     .hold.selected { outline:1.5px solid #f59e0b; outline-offset:2px; z-index:4; }
