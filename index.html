@@ -64,6 +64,7 @@
     .wall:not(.has-image) .photo-veil, .wall.original-photo .photo-veil { display:none; }
     .photo-tools { display:none; flex-direction:column; gap:8px; margin-top:10px; }
     #editorWall.has-image ~ .photo-tools { display:flex; }
+    #editorWall { touch-action:none; }
     .hold-legend { display:flex; justify-content:center; align-items:center; gap:12px; margin-top:8px; font-size:12.5px; font-weight:600; color:#374151; white-space:nowrap; }
     .legend-item { display:inline-flex; align-items:center; gap:5px; }
     .legend-dot { width:12px; height:12px; border-radius:50%; background:var(--hold-normal); box-shadow:0 0 0 1px #fff, 0 1px 3px rgba(0,0,0,.3); }
@@ -463,7 +464,7 @@
     dot.addEventListener("pointerdown", event => {
       // 이전 드래그의 click이 남아 다음 탭을 무시하지 않도록 매번 초기화합니다.
       drag.ignoreClick = false;
-      if (state.eraseMode || index !== state.selectedHoldIndex) return;
+      if (state.eraseMode || index !== state.selectedHoldIndex || sizePointers.size > 1) return;
       event.stopPropagation();
       drag.active = { index, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false };
       dot.setPointerCapture(event.pointerId);
@@ -582,6 +583,7 @@
 
   // ───────── 편집 화면 ─────────
   $("editorWall").addEventListener("click", event => {
+    if (drag.ignoreClick) { drag.ignoreClick = false; return; }
     if (!state.isAdmin || state.eraseMode) return;
     const rect = event.currentTarget.getBoundingClientRect();
     state.holds.push({
@@ -618,6 +620,55 @@
     }
     $("holdSizeValue").textContent = `${state.holdSize}px`;
   });
+  // 선택한 홀드가 있을 때 두 손가락으로 벌리거나 오므리면 그 홀드의 크기가 바뀝니다. (슬라이더와 같은 4~60px)
+  const sizePointers = new Map();
+  let sizePinch = null; // 두 손가락이 처음 닿았을 때의 거리와 홀드 크기
+  const HOLD_SIZE_MIN = 4, HOLD_SIZE_MAX = 60;
+  function setSelectedHoldSize(size) {
+    const index = state.selectedHoldIndex;
+    if (index < 0 || !state.holds[index]) return;
+    state.holdSize = Math.round(clampRange(size, HOLD_SIZE_MIN, HOLD_SIZE_MAX));
+    state.holds[index].size = state.holdSize;
+    const node = $("editorWall").querySelectorAll(".hold")[index];
+    if (node) node.style.setProperty("--hold-size", `${state.holdSize}px`);
+    $("holdSize").value = String(state.holdSize);
+    $("holdSizeValue").textContent = `${state.holdSize}px`;
+  }
+  // 캡처 단계에서 받아야 홀드 자체의 이벤트보다 먼저 손가락 수를 셀 수 있습니다.
+  const editorWall = $("editorWall");
+  editorWall.addEventListener("pointerdown", e => {
+    if (!state.isAdmin || state.eraseMode) return;
+    sizePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (sizePointers.size === 1) { drag.ignoreClick = false; return; }
+    if (sizePointers.size === 2 && state.selectedHoldIndex >= 0) {
+      const [a, b] = [...sizePointers.values()];
+      sizePinch = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, size: state.holds[state.selectedHoldIndex].size || DEFAULT_HOLD_SIZE };
+      drag.active = null;      // 드래그 중이던 홀드는 멈춥니다.
+      drag.ignoreClick = true; // 두 손가락 뒤에 생기는 click으로 포인트가 추가되거나 색이 바뀌지 않게 막습니다.
+    }
+  }, true);
+  editorWall.addEventListener("pointermove", e => {
+    if (!sizePointers.has(e.pointerId)) return;
+    sizePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!sizePinch || sizePointers.size < 2) return;
+    const [a, b] = [...sizePointers.values()];
+    setSelectedHoldSize(sizePinch.size * (Math.hypot(a.x - b.x, a.y - b.y) || 1) / sizePinch.dist);
+  }, true);
+  const endSizePointer = e => {
+    sizePointers.delete(e.pointerId);
+    if (sizePointers.size < 2) sizePinch = null;
+  };
+  editorWall.addEventListener("pointerup", endSizePointer, true);
+  editorWall.addEventListener("pointercancel", endSizePointer, true);
+
+  // 사진 밖의 빈 화면을 누르면 선택한 홀드를 선택 해제합니다. 버튼·입력칸을 누른 경우는 그대로 둡니다.
+  document.addEventListener("pointerdown", e => {
+    if (state.selectedHoldIndex < 0 || $("createScreen").classList.contains("hidden")) return;
+    if (e.target.closest("#editorWall, button, input, select, label, textarea, a")) return;
+    state.selectedHoldIndex = -1;
+    refreshEditor();
+  });
+
   $("eraseModeBtn").addEventListener("click", () => { state.eraseMode = !state.eraseMode; updateHoldTools(); });
   $("undoHoldBtn").addEventListener("click", () => { state.holds.pop(); state.selectedHoldIndex = -1; refreshEditor(); });
   $("clearHoldsBtn").addEventListener("click", () => { state.holds = []; state.selectedHoldIndex = -1; refreshEditor(); });
