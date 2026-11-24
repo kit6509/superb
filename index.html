@@ -63,8 +63,13 @@
     .photo-veil { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:1; }
     .wall:not(.has-image) .photo-veil, .wall.original-photo .photo-veil { display:none; }
     .photo-tools { display:none; flex-direction:column; gap:8px; margin-top:10px; }
-    #editorWall.has-image ~ .photo-tools { display:flex; }
+    .wall-wrap:has(#editorWall.has-image) .photo-tools { display:flex; }
     #editorWall { touch-action:none; }
+    .editor-zoom-view { cursor:default; }
+    /* 선택한 홀드 가장자리의 크기 손잡이. 한 손가락으로 끌면 홀드 크기가 바뀝니다. 손가락이 잘 닿도록 실제 크기보다 넓게 잡습니다. */
+    .size-handle { position:absolute; width:26px; height:26px; margin:-13px 0 0 -13px; border-radius:50%; background:#fff; border:3px solid #f59e0b; box-shadow:0 1px 4px rgba(0,0,0,.35); z-index:5; touch-action:none; cursor:nwse-resize; }
+    .size-handle::before { content:""; position:absolute; inset:-9px; }
+    .size-handle::after { content:""; position:absolute; inset:4px; border-radius:50%; background:#f59e0b; }
     .hold-legend { display:flex; justify-content:center; align-items:center; gap:12px; margin-top:8px; font-size:12.5px; font-weight:600; color:#374151; white-space:nowrap; }
     .legend-item { display:inline-flex; align-items:center; gap:5px; }
     .legend-dot { width:12px; height:12px; border-radius:50%; background:var(--hold-normal); box-shadow:0 0 0 1px #fff, 0 1px 3px rgba(0,0,0,.3); }
@@ -198,8 +203,12 @@
           <input id="wallFile" class="visually-hidden" type="file" accept="image/*" />
         </div>
         <div class="wall-wrap">
-          <div id="editorWall" class="wall" aria-label="홀드 위치 선택 영역">
-            <div id="photoVeil" class="photo-veil" aria-hidden="true"></div>
+          <!-- 두 손가락 확대/축소는 바깥 zoom-view가 잘라 주고, 실제 변환은 #editorWall에 줍니다. -->
+          <div id="editorZoomView" class="zoom-view editor-zoom-view">
+            <div id="editorWall" class="wall" aria-label="홀드 위치 선택 영역">
+              <div id="photoVeil" class="photo-veil" aria-hidden="true"></div>
+              <div id="sizeHandle" class="size-handle hidden" aria-hidden="true"></div>
+            </div>
           </div>
           <div class="hold-legend" aria-label="홀드 색 안내">
             <span class="legend-item"><span class="legend-dot"></span>일반홀드</span>
@@ -459,38 +468,9 @@
       wall.appendChild(dot);
     });
   }
-  // 편집 화면의 홀드 동작: 탭하면 선택/선택 취소, 지우개 모드면 삭제, 선택된 홀드를 누른 채 끌면 이동.
+  // 편집 화면의 홀드 동작: 탭하면 선택/선택 취소, 지우개 모드면 삭제, 한 번 더 누르면 종류 변경.
+  // 선택된 홀드의 한 손가락 드래그 이동은 #editorWall의 포인터 핸들러(아래)가 맡습니다.
   function bindHoldEvents(dot, wall, hold, index) {
-    dot.addEventListener("pointerdown", event => {
-      // 이전 드래그의 click이 남아 다음 탭을 무시하지 않도록 매번 초기화합니다.
-      drag.ignoreClick = false;
-      if (state.eraseMode || index !== state.selectedHoldIndex || sizePointers.size > 1) return;
-      event.stopPropagation();
-      drag.active = { index, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false };
-      dot.setPointerCapture(event.pointerId);
-    });
-    dot.addEventListener("pointermove", event => {
-      const d = drag.active;
-      if (!d || d.pointerId !== event.pointerId) return;
-      // 손가락 떨림 정도의 미세한 움직임은 드래그가 아니라 탭으로 취급합니다.
-      if (!d.moved && Math.hypot(event.clientX - d.startX, event.clientY - d.startY) <= DRAG_THRESHOLD_PX) return;
-      d.moved = true;
-      const rect = wall.getBoundingClientRect();
-      const target = state.holds[d.index];
-      target.x = normCoord((event.clientX - rect.left) / rect.width);
-      target.y = normCoord((event.clientY - rect.top) / rect.height);
-      dot.style.left = `${target.x * 100}%`; dot.style.top = `${target.y * 100}%`;
-    });
-    const endDrag = event => {
-      const d = drag.active;
-      if (!d || d.pointerId !== event.pointerId) return;
-      // 드래그 후 발생하는 click은 선택 취소로 처리되지 않도록 무시합니다.
-      drag.ignoreClick = d.moved;
-      drag.active = null;
-      if (dot.hasPointerCapture(event.pointerId)) dot.releasePointerCapture(event.pointerId);
-    };
-    dot.addEventListener("pointerup", endDrag);
-    dot.addEventListener("pointercancel", endDrag);
     dot.addEventListener("click", event => {
       event.stopPropagation();
       if (drag.ignoreClick) { drag.ignoreClick = false; return; }
@@ -526,6 +506,20 @@
     $("eraseModeBtn").setAttribute("aria-pressed", String(state.eraseMode));
     $("eraseModeBtn").textContent = state.eraseMode ? "지우개 모드: 켜짐" : "지우개 모드: 꺼짐";
     renderHolds($("editorWall"), state.holds, true);
+    placeSizeHandle();
+  }
+  // 크기 손잡이는 선택된 홀드의 오른쪽 아래 가장자리에 붙입니다. 지우개 모드나 선택 해제 상태에서는 숨깁니다.
+  function placeSizeHandle() {
+    const handle = $("sizeHandle");
+    const index = state.selectedHoldIndex;
+    const hold = index >= 0 ? state.holds[index] : null;
+    const show = Boolean(state.isAdmin && hold && !state.eraseMode);
+    handle.classList.toggle("hidden", !show);
+    if (!show) return;
+    // 손잡이 중심을 홀드 테두리(반지름 + 여유 4px) 위의 대각선 지점에 둡니다.
+    const reach = ((hold.size || DEFAULT_HOLD_SIZE) / 2 + 4) * Math.SQRT1_2;
+    handle.style.left = `calc(${hold.x * 100}% + ${reach}px)`;
+    handle.style.top = `calc(${hold.y * 100}% + ${reach}px)`;
   }
   // 홀드가 바뀐 뒤 편집 도구와 홀드 수를 함께 갱신합니다.
   const refreshEditor = () => { updateHoldTools(); };
@@ -583,8 +577,16 @@
 
   // ───────── 편집 화면 ─────────
   $("editorWall").addEventListener("click", event => {
+    if (event.target.closest("#sizeHandle")) return;
     if (drag.ignoreClick) { drag.ignoreClick = false; return; }
-    if (!state.isAdmin || state.eraseMode) return;
+    if (!state.isAdmin) return;
+    // 홀드가 선택된 상태에서 사진의 빈 곳을 누르면 선택만 해제합니다. 이때는 새 포인트를 만들지 않습니다.
+    if (state.selectedHoldIndex >= 0) {
+      state.selectedHoldIndex = -1;
+      refreshEditor();
+      return;
+    }
+    if (state.eraseMode) return;
     const rect = event.currentTarget.getBoundingClientRect();
     state.holds.push({
       x: normCoord((event.clientX - rect.left) / rect.width),
@@ -617,12 +619,11 @@
       // 전체를 다시 그리지 않고, 선택한 홀드 하나의 크기만 바꿉니다.
       const node = $("editorWall").querySelectorAll(".hold")[index];
       if (node) node.style.setProperty("--hold-size", `${state.holdSize}px`);
+      placeSizeHandle();
     }
     $("holdSizeValue").textContent = `${state.holdSize}px`;
   });
-  // 선택한 홀드가 있을 때 두 손가락으로 벌리거나 오므리면 그 홀드의 크기가 바뀝니다. (슬라이더와 같은 4~60px)
-  const sizePointers = new Map();
-  let sizePinch = null; // 두 손가락이 처음 닿았을 때의 거리와 홀드 크기
+  // 선택한 홀드의 크기를 바꿉니다. 슬라이더, 손잡이 드래그가 같은 4~60px 범위를 씁니다.
   const HOLD_SIZE_MIN = 4, HOLD_SIZE_MAX = 60;
   function setSelectedHoldSize(size) {
     const index = state.selectedHoldIndex;
@@ -633,33 +634,110 @@
     if (node) node.style.setProperty("--hold-size", `${state.holdSize}px`);
     $("holdSize").value = String(state.holdSize);
     $("holdSizeValue").textContent = `${state.holdSize}px`;
+    placeSizeHandle();
   }
-  // 캡처 단계에서 받아야 홀드 자체의 이벤트보다 먼저 손가락 수를 셀 수 있습니다.
+  // 사진 확대/축소 상태. 두 손가락으로 벌리고 오므리면 확대/축소, 함께 끌면 이동합니다.
+  const editZoom = { scale: 1, x: 0, y: 0 };
+  function applyEditZoom() {
+    const wall = $("editorWall");
+    const maxX = (editZoom.scale - 1) * wall.offsetWidth / 2, maxY = (editZoom.scale - 1) * wall.offsetHeight / 2;
+    editZoom.x = clampRange(editZoom.x, -maxX, maxX);
+    editZoom.y = clampRange(editZoom.y, -maxY, maxY);
+    if (editZoom.scale === 1) { editZoom.x = 0; editZoom.y = 0; }
+    wall.style.transform = `translate(${editZoom.x}px, ${editZoom.y}px) scale(${editZoom.scale})`;
+  }
+  // 캡처 단계에서 받아야 홀드 자체의 이벤트보다 먼저 손가락 수와 시작 위치를 알 수 있습니다.
   const editorWall = $("editorWall");
+  const wallPointers = new Map(); // 사진 위에 닿은 손가락들 (pointerId → 화면 좌표)
+  let pinch = null;               // 두 손가락 확대/축소의 시작 상태
+  let resizeDrag = null;          // 손잡이 드래그 상태 (pointerId, 홀드 중심, 시작 거리와 크기)
+  // 화면 좌표를 사진 안의 정규화 좌표(0~1)로 바꿉니다. 확대된 상태도 getBoundingClientRect가 반영합니다.
+  const wallPoint = (clientX, clientY) => {
+    const rect = editorWall.getBoundingClientRect();
+    return { x: (clientX - rect.left) / rect.width, y: (clientY - rect.top) / rect.height };
+  };
   editorWall.addEventListener("pointerdown", e => {
-    if (!state.isAdmin || state.eraseMode) return;
-    sizePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (sizePointers.size === 1) { drag.ignoreClick = false; return; }
-    if (sizePointers.size === 2 && state.selectedHoldIndex >= 0) {
-      const [a, b] = [...sizePointers.values()];
-      sizePinch = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, size: state.holds[state.selectedHoldIndex].size || DEFAULT_HOLD_SIZE };
-      drag.active = null;      // 드래그 중이던 홀드는 멈춥니다.
-      drag.ignoreClick = true; // 두 손가락 뒤에 생기는 click으로 포인트가 추가되거나 색이 바뀌지 않게 막습니다.
+    if (!state.isAdmin) return;
+    wallPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (wallPointers.size === 1) {
+      drag.ignoreClick = false;
+      const index = state.selectedHoldIndex;
+      const hold = index >= 0 ? state.holds[index] : null;
+      if (!hold) return;
+      if (e.target.closest("#sizeHandle")) {
+        // 손잡이를 잡으면 크기 조절입니다. 홀드 중심에서 손가락까지의 거리 비율로 크기를 정합니다.
+        const rect = editorWall.getBoundingClientRect();
+        const cx = rect.left + hold.x * rect.width, cy = rect.top + hold.y * rect.height;
+        resizeDrag = { pointerId: e.pointerId, cx, cy, startDist: Math.hypot(e.clientX - cx, e.clientY - cy) || 1, startSize: hold.size || DEFAULT_HOLD_SIZE };
+        try { $("sizeHandle").setPointerCapture(e.pointerId); } catch (_) {}
+        return;
+      }
+      // 홀드가 선택되어 있으면 한 손가락으로 사진 어디를 끌어도 그 홀드가 따라 움직입니다(편집 중에만).
+      // 누른 지점과 홀드 중심의 차이(offset)를 저장해 두어 처음에 홀드가 튀지 않게 합니다.
+      if (!state.eraseMode) {
+        const p = wallPoint(e.clientX, e.clientY);
+        drag.active = { index, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, offX: hold.x - p.x, offY: hold.y - p.y, moved: false };
+      }
+      return;
+    }
+    if (wallPointers.size === 2) {
+      // 두 번째 손가락이 닿으면 홀드 이동/크기 조절은 멈추고 사진 확대/축소로 바뀝니다.
+      const [a, b] = [...wallPointers.values()];
+      pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, scale: editZoom.scale, x: editZoom.x, y: editZoom.y };
+      drag.active = null;
+      resizeDrag = null;
+      drag.ignoreClick = true; // 두 손가락 뒤에 생기는 click으로 포인트가 추가되거나 선택이 바뀌지 않게 막습니다.
     }
   }, true);
   editorWall.addEventListener("pointermove", e => {
-    if (!sizePointers.has(e.pointerId)) return;
-    sizePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (!sizePinch || sizePointers.size < 2) return;
-    const [a, b] = [...sizePointers.values()];
-    setSelectedHoldSize(sizePinch.size * (Math.hypot(a.x - b.x, a.y - b.y) || 1) / sizePinch.dist);
+    if (!wallPointers.has(e.pointerId)) return;
+    wallPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (wallPointers.size >= 2) {
+      if (!pinch) return;
+      const [a, b] = [...wallPointers.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      editZoom.scale = clampRange(pinch.scale * dist / pinch.dist, 1, 4);
+      editZoom.x = pinch.x + ((a.x + b.x) / 2 - pinch.mx);
+      editZoom.y = pinch.y + ((a.y + b.y) / 2 - pinch.my);
+      applyEditZoom();
+      return;
+    }
+    if (resizeDrag && resizeDrag.pointerId === e.pointerId) {
+      const dist = Math.hypot(e.clientX - resizeDrag.cx, e.clientY - resizeDrag.cy);
+      setSelectedHoldSize(resizeDrag.startSize * dist / resizeDrag.startDist);
+      return;
+    }
+    const d = drag.active;
+    if (d && d.pointerId === e.pointerId) {
+      // 손가락 떨림 정도의 미세한 움직임은 드래그가 아니라 탭으로 취급합니다.
+      if (!d.moved && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) <= DRAG_THRESHOLD_PX) return;
+      if (!d.moved) { d.moved = true; try { editorWall.setPointerCapture(e.pointerId); } catch (_) {} }
+      const target = state.holds[d.index];
+      if (target) {
+        const p = wallPoint(e.clientX, e.clientY);
+        target.x = normCoord(p.x + d.offX);
+        target.y = normCoord(p.y + d.offY);
+        const node = editorWall.querySelectorAll(".hold")[d.index];
+        if (node) { node.style.left = `${target.x * 100}%`; node.style.top = `${target.y * 100}%`; }
+        placeSizeHandle();
+      }
+    }
   }, true);
-  const endSizePointer = e => {
-    sizePointers.delete(e.pointerId);
-    if (sizePointers.size < 2) sizePinch = null;
+  const endWallPointer = e => {
+    if (!wallPointers.has(e.pointerId)) return;
+    const d = drag.active;
+    if (d && d.pointerId === e.pointerId) {
+      // 드래그를 끝낸 뒤 생기는 click은 선택 취소나 포인트 추가로 처리되지 않도록 무시합니다.
+      drag.ignoreClick = d.moved;
+      drag.active = null;
+      if (editorWall.hasPointerCapture(e.pointerId)) editorWall.releasePointerCapture(e.pointerId);
+    }
+    if (resizeDrag && resizeDrag.pointerId === e.pointerId) resizeDrag = null;
+    wallPointers.delete(e.pointerId);
+    if (wallPointers.size < 2) pinch = null;
   };
-  editorWall.addEventListener("pointerup", endSizePointer, true);
-  editorWall.addEventListener("pointercancel", endSizePointer, true);
+  editorWall.addEventListener("pointerup", endWallPointer, true);
+  editorWall.addEventListener("pointercancel", endWallPointer, true);
 
   // 사진 밖의 빈 화면을 누르면 선택한 홀드를 선택 해제합니다. 버튼·입력칸을 누른 경우는 그대로 둡니다.
   document.addEventListener("pointerdown", e => {
