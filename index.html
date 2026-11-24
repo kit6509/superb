@@ -67,8 +67,8 @@
     /* 스크롤과 두 손가락 확대/축소는 브라우저가 맡습니다. 홀드가 선택된 동안의 한 손가락 끌기는 JS에서 스크롤을 막습니다. */
     #editorWall { touch-action:pan-x pan-y pinch-zoom; }
     /* 선택한 홀드 가장자리의 작은 크기 손잡이(단색). 한 손가락으로 끌면 홀드 크기가 바뀝니다. 터치 영역은 보이는 크기보다 넓게 잡습니다. */
-    .size-handle { position:absolute; width:10px; height:10px; margin:-5px 0 0 -5px; border-radius:50%; background:#f59e0b; z-index:5; cursor:nwse-resize; }
-    .size-handle::before { content:""; position:absolute; inset:-10px; }
+    .size-handle { position:absolute; width:7px; height:7px; margin:-3.5px 0 0 -3.5px; border-radius:50%; background:#f59e0b; z-index:5; cursor:nwse-resize; }
+    .size-handle::before { content:""; position:absolute; inset:-8px; }
     .hold-legend { display:flex; justify-content:center; align-items:center; gap:12px; margin-top:8px; font-size:12.5px; font-weight:600; color:#374151; white-space:nowrap; }
     .legend-item { display:inline-flex; align-items:center; gap:5px; }
     .legend-dot { width:12px; height:12px; border-radius:50%; background:var(--hold-normal); box-shadow:0 0 0 1px #fff, 0 1px 3px rgba(0,0,0,.3); }
@@ -80,7 +80,7 @@
     .hold { position:absolute; width:var(--hold-size,12px); height:var(--hold-size,12px); border:min(3px, calc(var(--hold-size,12px) * .15)) solid transparent; border-radius:50%; background:var(--hold-normal, rgba(160,215,255,.75)); transform:translate(-50%,-50%); box-shadow:0 0 0 max(1px, calc(var(--hold-size,12px) * .1)) rgba(255,255,255,.95),0 1px 6px rgba(0,0,0,.28); pointer-events:auto; cursor:pointer; padding:0; z-index:2; }
     .hold.start { background:var(--hold-start, rgba(110,255,160,.7)); }
     .hold.finish { background:var(--hold-finish, rgba(255,130,210,.7)); }
-    .hold.selected { outline:3px solid #f59e0b; outline-offset:3px; z-index:4; }
+    .hold.selected { outline:1.5px solid #f59e0b; outline-offset:2px; z-index:4; }
     .hold-no { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font:700 calc(var(--hold-size,12px) * .5)/1 system-ui,sans-serif; color:#0f172a; text-shadow:0 0 2px rgba(255,255,255,.9); pointer-events:none; }
     .hold-tools { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px; }
     .hold-tools .size-control { flex:1 1 180px; display:flex; align-items:center; gap:9px; font-size:13px; color:#374151; }
@@ -512,10 +512,10 @@
     const show = Boolean(state.isAdmin && hold && !state.eraseMode);
     handle.classList.toggle("hidden", !show);
     if (!show) return;
-    // 손잡이 중심을 홀드 테두리(반지름 + 여유 4px) 위의 대각선 지점에 둡니다.
-    const reach = ((hold.size || DEFAULT_HOLD_SIZE) / 2 + 4) * Math.SQRT1_2;
-    handle.style.left = `calc(${hold.x * 100}% + ${reach}px)`;
-    handle.style.top = `calc(${hold.y * 100}% + ${reach}px)`;
+    // 손잡이 중심을 홀드 테두리(반지름 + 선택 테두리 바깥)보다 조금 바깥, 오른쪽 아래(약 32도) 지점에 둡니다.
+    const reach = (hold.size || DEFAULT_HOLD_SIZE) / 2 + 6;
+    handle.style.left = `calc(${hold.x * 100}% + ${(reach * 0.85).toFixed(2)}px)`;
+    handle.style.top = `calc(${hold.y * 100}% + ${(reach * 0.53).toFixed(2)}px)`;
   }
   // 홀드가 바뀐 뒤 편집 도구와 홀드 수를 함께 갱신합니다.
   const refreshEditor = () => { updateHoldTools(); };
