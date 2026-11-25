@@ -80,7 +80,11 @@
     .solved-badge { display:inline-block; margin-left:6px; padding:2px 8px; border-radius:999px; background:#dcfce7; color:#15803d; font-size:12px; font-weight:800; vertical-align:middle; white-space:nowrap; }
     #solveToggleBtn.solved { background:#16a34a; color:#ffffff; }
     .feel-grade { grid-column:2; grid-row:2; justify-self:end; font-size:11px; font-weight:700; color:#b45309; white-space:nowrap; }
-    .member-count { flex:none; font-size:14px; font-weight:800; color:#b45309; white-space:nowrap; }
+    #memberPanel { margin-bottom:14px; }
+    .member-summary { width:100%; display:flex; justify-content:space-between; align-items:center; gap:10px; padding:14px 16px; border:1px solid var(--line); border-radius:14px; background:#ffffff; color:#111; font-size:16px; font-weight:800; cursor:pointer; }
+    .member-summary-right { display:inline-flex; align-items:center; gap:6px; }
+    .member-summary strong { font-size:14px; color:#b45309; white-space:nowrap; }
+    .member-summary-right > span { color:#9ca3af; font-size:20px; line-height:1; }
     .member-list { list-style:none; margin:10px 0 0; padding:0; display:flex; flex-direction:column; gap:6px; max-height:300px; overflow-y:auto; }
     .member-list li { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 12px; border:1px solid var(--line); border-radius:10px; background:#ffffff; }
     .member-list li strong { overflow-wrap:anywhere; }
@@ -199,13 +203,11 @@
     </section>
 
     <section id="createScreen" class="hidden">
-      <div id="memberPanel" class="panel hidden">
-        <div class="panel-head">
-          <h2 class="section-title">회원 관리</h2>
-          <span id="memberCount" class="member-count">-</span>
-        </div>
-        <ul id="memberList" class="member-list"><li class="small">불러오는 중…</li></ul>
-        <p class="small note-center">한 번이라도 로그인한 회원만 목록에 나타납니다. 비밀번호는 저장하지 않아 확인할 수 없습니다.</p>
+      <div id="memberPanel" class="hidden">
+        <button id="memberOpenBtn" class="member-summary" type="button" aria-haspopup="dialog">
+          <span>회원 관리</span>
+          <span class="member-summary-right"><strong id="memberCount">-</strong><span aria-hidden="true">›</span></span>
+        </button>
       </div>
       <div id="editorPanel" class="panel hidden">
         <div class="panel-head">
@@ -316,6 +318,17 @@
     <div class="field"><label for="authPassword">비밀번호</label><input id="authPassword" type="password" autocomplete="current-password" placeholder="6자 이상" /></div>
     <button id="authSubmitBtn" class="btn full" type="button">로그인</button>
     <div id="authMessage" class="message" aria-live="polite"></div>
+  </div>
+</div>
+
+<div id="memberBackdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="memberTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <div><h2 id="memberTitle">회원 관리</h2><div class="muted small" id="memberListCount">-</div></div>
+      <button id="closeMember" class="close" type="button" aria-label="닫기">×</button>
+    </div>
+    <ul id="memberList" class="member-list"><li class="small">불러오는 중…</li></ul>
+    <p class="small note-center">한 번이라도 로그인한 회원만 목록에 나타납니다. 비밀번호는 저장하지 않아 확인할 수 없습니다.</p>
   </div>
 </div>
 
@@ -610,6 +623,7 @@
     $("navCreate").classList.toggle("hidden", !loggedInAdmin);
     $("editorPanel").classList.toggle("hidden", !loggedInAdmin);
     $("memberPanel").classList.toggle("hidden", !loggedInAdmin);
+    if (!loggedInAdmin) closeMemberModal();
     if (!loggedInAdmin && !$("listScreen").classList.contains("hidden")) {
       $("navCreate").classList.remove("active");
     }
@@ -818,11 +832,11 @@
 
   // ───────── 로그인 ─────────
   const AUTH_ERRORS = {
-    "auth/invalid-email":"이메일 주소를 확인해 주세요.",
+    "auth/invalid-email":"아이디 형식을 확인해 주세요.",
     "auth/missing-password":"비밀번호를 입력해 주세요.",
     "auth/weak-password":"비밀번호는 6자 이상이어야 합니다.",
-    "auth/email-already-in-use":"이미 가입된 이메일입니다.",
-    "auth/invalid-credential":"이메일 또는 비밀번호가 올바르지 않습니다.",
+    "auth/email-already-in-use":"이미 사용 중인 아이디입니다.",
+    "auth/invalid-credential":"아이디 또는 비밀번호가 올바르지 않습니다.",
     "auth/too-many-requests":"요청이 많습니다. 잠시 후 다시 시도해 주세요.",
     "auth/network-request-failed":"네트워크 연결을 확인해 주세요."
   };
@@ -900,6 +914,11 @@
     $(inputId).addEventListener("keydown", e => { if (e.key === "Enter") submitAuth(); });
   });
   $("closeAuth").addEventListener("click", hideAuthModal);
+  // 회원 관리 팝업: 관리자 페이지의 요약 줄을 누르면 목록이 뜹니다.
+  function closeMemberModal() { $("memberBackdrop").classList.add("hidden"); }
+  $("memberOpenBtn").addEventListener("click", () => $("memberBackdrop").classList.remove("hidden"));
+  $("closeMember").addEventListener("click", closeMemberModal);
+  $("memberBackdrop").addEventListener("click", e => { if (e.target === e.currentTarget) closeMemberModal(); });
   $("authBackdrop").addEventListener("click", e => { if (e.target === e.currentTarget) hideAuthModal(); });
 
   // ───────── 푼 문제 체크 ─────────
@@ -1214,7 +1233,9 @@
     const filtered = visibleProblems();
     $("problemList").innerHTML = filtered.length
       ? filtered.map(renderCard).join("")
-      : '<div class="panel empty">조건에 맞는 문제가 없습니다.<br>첫 번째 문제를 등록해 보세요!</div>';
+      : state.problems.length
+        ? '<div class="panel empty">조건에 맞는 문제가 없습니다.<br>등급이나 검색어를 바꿔 보세요.</div>'
+        : `<div class="panel empty">아직 등록된 문제가 없습니다.${state.isAdmin ? "<br>관리자 페이지에서 첫 번째 문제를 등록해 보세요!" : ""}</div>`;
   }
   async function deleteProblem(button) {
     if (!state.isAdmin) return;
@@ -1483,6 +1504,7 @@
     if (e.key !== "Escape") return;
     if (isFullOpen()) hideFullView();
     else if (!$("authBackdrop").classList.contains("hidden")) hideAuthModal();
+    else if (!$("memberBackdrop").classList.contains("hidden")) closeMemberModal();
     else hideDetail();
   });
 
@@ -1636,7 +1658,9 @@
     if (!state.isAdmin) return;
     unsubscribeMembers = onSnapshot(query(membersRef, orderBy("createdAt", "asc")), snapshot => {
       const members = snapshot.docs.map(d => d.data());
-      $("memberCount").textContent = `총 ${members.length}명`;
+      const countText = `총 ${members.length}명`;
+      $("memberCount").textContent = countText;
+      $("memberListCount").textContent = countText;
       $("memberList").innerHTML = members.length
         ? members.map(m => {
             const joined = m.createdAt && m.createdAt.toDate ? m.createdAt.toDate().toLocaleDateString("ko-KR") : "";
