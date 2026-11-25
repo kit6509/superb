@@ -77,9 +77,12 @@
     .legend-dot.leg { background:var(--hold-leg); }
     .wall.original-photo img.wall-image { filter:none; }
     .detail-photo-actions { display:flex; gap:8px; margin-bottom:10px; }
-    .detail-photo-actions .btn { flex:1; }
+    .detail-photo-actions .btn { flex:1; min-width:0; padding:11px 4px; font-size:13px; white-space:nowrap; }
     .solved-badge { display:inline-block; margin-left:6px; padding:2px 8px; border-radius:999px; background:#dcfce7; color:#15803d; font-size:12px; font-weight:800; vertical-align:middle; white-space:nowrap; }
     #solveToggleBtn.solved { background:#16a34a; color:#ffffff; }
+    .feel-grade { margin-top:4px; font-size:11px; font-weight:700; color:#b45309; white-space:nowrap; text-align:right; }
+    .feel-row { display:flex; align-items:center; gap:10px; margin:0 0 8px; font-size:13px; font-weight:700; }
+    .feel-row select { flex:1; padding:9px 10px; border:1px solid var(--line); border-radius:10px; background:#ffffff; font-size:14px; }
     .hold { position:absolute; width:var(--hold-size,12px); height:var(--hold-size,12px); border:min(3px, calc(var(--hold-size,12px) * .15)) solid transparent; border-radius:50%; background:var(--hold-normal, rgba(160,215,255,.75)); transform:translate(-50%,-50%); box-shadow:0 0 0 max(1px, calc(var(--hold-size,12px) * .1)) rgba(255,255,255,.95),0 1px 6px rgba(0,0,0,.28); pointer-events:auto; cursor:pointer; padding:0; z-index:2; }
     /* 손가락으로 누르기 쉽도록 보이지 않는 터치 영역을 홀드 바깥으로 6px씩 넓힙니다. */
     .hold::before { content:""; position:absolute; inset:-6px; border-radius:50%; }
@@ -264,6 +267,10 @@
       <button id="detailDownloadBtn" class="btn secondary" type="button">사진 다운로드</button>
       <button id="solveToggleBtn" class="btn secondary hidden" type="button" aria-pressed="false">푼 문제로 체크</button>
     </div>
+    <div id="feelRow" class="feel-row hidden">
+      <label for="feelSelect">사용자 체감 난이도</label>
+      <select id="feelSelect"></select>
+    </div>
     <div id="solveMessage" class="message" aria-live="polite"></div>
     <div id="zoomSlot">
     <div id="zoomHome" class="zoom-home">
@@ -324,7 +331,7 @@
     signOut
   } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
   import {
-    getFirestore, collection, addDoc, setDoc, getDoc, deleteDoc, doc, onSnapshot, query, orderBy, where, serverTimestamp
+    getFirestore, collection, addDoc, setDoc, getDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
   const app = initializeApp(firebaseConfig);
@@ -380,7 +387,7 @@
   });
 
   const state = {
-    user: null, isAdmin: false, solved: new Set(), problems: [], listType: "bouldering", detailId: "",
+    user: null, isAdmin: false, solved: new Set(), myFeel: new Map(), solvesByProblem: new Map(), problems: [], listType: "bouldering", detailId: "",
     holds: [], previewUrl: "", wallFile: null, wallStored: "", holdSize: DEFAULT_HOLD_SIZE, eraseMode: false, selectedHoldIndex: -1,
     openActionId: "",     // 목록에서 '수정'을 눌러 펼친 문제 id
     editingProblem: null  // 문제변경 중이면 원본 문제 정보, 아니면 null
@@ -881,12 +888,28 @@
   let unsubscribeSolves = null;
   function refreshCards() { if (problemsReady) renderProblemList(); }
   // 로그인한 사람의 푼 문제 목록을 실시간으로 받아 목록 카드와 상세 버튼에 반영합니다.
+  // 로그인한 회원은 모든 푼 문제 기록을 받습니다. 내 기록은 체크 상태에, 전체 기록은 문제별 체감 난이도 집계에 씁니다.
   function watchSolves(uid) {
     if (unsubscribeSolves) { unsubscribeSolves(); unsubscribeSolves = null; }
     state.solved = new Set();
+    state.myFeel = new Map();
+    state.solvesByProblem = new Map();
     if (uid) {
-      unsubscribeSolves = onSnapshot(query(solvesRef, where("uid", "==", uid)), snapshot => {
-        state.solved = new Set(snapshot.docs.map(d => d.data().problemId));
+      unsubscribeSolves = onSnapshot(solvesRef, snapshot => {
+        const byProblem = new Map(), mine = new Set(), myFeel = new Map();
+        snapshot.docs.forEach(d => {
+          const s = d.data();
+          if (!s.problemId) return;
+          if (!byProblem.has(s.problemId)) byProblem.set(s.problemId, []);
+          byProblem.get(s.problemId).push(s.feelGrade || "");
+          if (s.uid === uid) {
+            mine.add(s.problemId);
+            if (s.feelGrade) myFeel.set(s.problemId, s.feelGrade);
+          }
+        });
+        state.solvesByProblem = byProblem;
+        state.solved = mine;
+        state.myFeel = myFeel;
         refreshCards();
         renderSolveButton();
       }, error => {
@@ -897,14 +920,65 @@
     refreshCards();
     renderSolveButton();
   }
+  // 문제를 푼 사람들이 고른 체감 난이도 중 가장 많은 값입니다. 동점이면 더 낮은 등급을 씁니다.
+  function feelSummary(p) {
+    const votes = (state.solvesByProblem.get(p.id) || []).filter(Boolean);
+    if (!votes.length) return null;
+    const counts = new Map();
+    votes.forEach(g => counts.set(g, (counts.get(g) || 0) + 1));
+    const order = grades(p.type);
+    let best = null;
+    counts.forEach((count, grade) => {
+      const rank = order.indexOf(grade);
+      if (!best || count > best.count || (count === best.count && rank < best.rank)) best = { grade, count, rank };
+    });
+    return { grade: best.grade, count: best.count, total: votes.length };
+  }
+  function detailMetaText(p) {
+    const feel = feelSummary(p);
+    return `${typeName(p.type)} · ${p.grade || "-"} · 홀드 ${(p.holds || []).length}개${setterAndDate(p)}` +
+      (feel ? ` · 사용자 체감 난이도 ${feel.grade} (${feel.count}/${feel.total}명)` : "");
+  }
   function renderSolveButton() {
     const btn = $("solveToggleBtn");
     btn.classList.toggle("hidden", !state.user);
     const solved = state.solved.has(state.detailId);
-    btn.textContent = solved ? "✔ 푼 문제 (체크 해제)" : "푼 문제로 체크";
+    btn.textContent = solved ? "✔ 체크됨" : "푼 문제로 체크";
     btn.classList.toggle("solved", solved);
     btn.setAttribute("aria-pressed", String(solved));
+    renderFeelRow();
   }
+  // 체크한 사람에게만 체감 난이도 선택창을 보여주고, 내가 고른 값을 채워 넣습니다.
+  function renderFeelRow() {
+    const p = findProblem(state.detailId);
+    if (p) $("detailMeta").textContent = detailMetaText(p);
+    const show = Boolean(p && state.user && state.solved.has(p.id));
+    $("feelRow").classList.toggle("hidden", !show);
+    if (!show) return;
+    const select = $("feelSelect");
+    if (select.dataset.type !== p.type) {
+      select.innerHTML = ['<option value="">선택 안 함</option>']
+        .concat(grades(p.type).map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`)).join("");
+      select.dataset.type = p.type;
+    }
+    select.value = state.myFeel.get(p.id) || "";
+  }
+  $("feelSelect").addEventListener("change", async () => {
+    const user = state.user, problemId = state.detailId;
+    if (!user || !problemId || !state.solved.has(problemId)) return;
+    const select = $("feelSelect");
+    setMessage("solveMessage", "");
+    select.disabled = true;
+    try {
+      // 체크 기록 문서에 체감 난이도만 덧붙입니다. 선택 안 함이면 null로 저장합니다.
+      await setDoc(solveDoc(user.uid, problemId), { feelGrade: select.value || null }, { merge: true });
+    } catch (e) {
+      const detail = e.code ? `${e.code}: ${e.message}` : e.message;
+      setMessage("solveMessage", `체감 난이도 저장에 실패했습니다: ${detail}`, "error");
+    } finally {
+      select.disabled = false;
+    }
+  });
   $("solveToggleBtn").addEventListener("click", async () => {
     const user = state.user, problemId = state.detailId;
     if (!user || !problemId) return;
@@ -1083,6 +1157,7 @@
     const id = escapeHtml(p.id);
     const isOpen = state.openActionId === p.id;
     const solvedBadge = state.solved.has(p.id) ? '<span class="solved-badge">✔ 푼 문제</span>' : "";
+    const feel = feelSummary(p);
     const editButton = state.isAdmin
       ? `<button class="btn secondary compact edit-open" type="button" data-edit-id="${id}" aria-expanded="${isOpen}">수정</button>`
       : "";
@@ -1098,6 +1173,7 @@
         <div class="problem-meta">${typeName(p.type)} · 홀드 ${(p.holds || []).length}개${escapeHtml(setterAndDate(p))}</div></div>
         <div class="card-side">
           <div class="grade">${escapeHtml(p.grade || "-")}</div>
+          ${feel ? `<div class="feel-grade">체감 ${escapeHtml(feel.grade)}</div>` : ""}
           ${editButton}
         </div>
         ${actions}
@@ -1242,7 +1318,7 @@
     state.detailId = id;
     renderSolveButton();
     $("detailTitle").textContent = p.name || "이름 없는 문제";
-    $("detailMeta").textContent = `${typeName(p.type)} · ${p.grade || "-"} · 홀드 ${(p.holds || []).length}개${setterAndDate(p)}`;
+    $("detailMeta").textContent = detailMetaText(p);
     const wall = $("detailWall");
     wall.innerHTML = "";
     // 편집 때 정한 채도와 흰색 배경을 상세 화면에도 같은 모습으로 적용합니다.
