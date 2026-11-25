@@ -154,6 +154,9 @@
       .wall { aspect-ratio:1/1; }
     }
   </style>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#f59e0b" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
 </head>
 <body>
 <div class="app">
@@ -1705,6 +1708,12 @@
   updateFilterGrades();
   refreshEditor();
   renderAuth();
+</script>
+<script>
+  // 설치형 앱 조건을 맞추기 위해 서비스 워커를 등록합니다. https 주소나 localhost에서만 동작합니다.
+  if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
+    navigator.serviceWorker.register("sw.js").catch(error => console.error(error));
+  }
 </script>
 </body>
 </html>
