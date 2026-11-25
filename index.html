@@ -81,6 +81,7 @@
     .solved-badge { display:inline-block; margin-left:6px; padding:2px 8px; border-radius:999px; background:#dcfce7; color:#15803d; font-size:12px; font-weight:800; vertical-align:middle; white-space:nowrap; }
     #solveToggleBtn.solved { background:#16a34a; color:#ffffff; }
     .grade-stack { display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
+    .problem-card > div:first-child { flex:1 1 0; min-width:0; }
     .feel-grade { font-size:11px; font-weight:700; color:#b45309; white-space:nowrap; }
     .feel-row { display:flex; align-items:center; gap:10px; margin:0 0 8px; font-size:13px; font-weight:700; }
     .feel-row select { flex:1; padding:9px 10px; border:1px solid var(--line); border-radius:10px; background:#ffffff; font-size:14px; }
@@ -889,35 +890,30 @@
   let unsubscribeSolves = null;
   function refreshCards() { if (problemsReady) renderProblemList(); }
   // 로그인한 사람의 푼 문제 목록을 실시간으로 받아 목록 카드와 상세 버튼에 반영합니다.
-  // 로그인한 회원은 모든 푼 문제 기록을 받습니다. 내 기록은 체크 상태에, 전체 기록은 문제별 체감 난이도 집계에 씁니다.
+  // 모든 방문자가 전체 푼 문제 기록을 받아 문제별 체감 난이도 집계에 씁니다. 내 기록(체크 상태, 내 체감 난이도)은 로그인했을 때만 채웁니다.
   function watchSolves(uid) {
     if (unsubscribeSolves) { unsubscribeSolves(); unsubscribeSolves = null; }
-    state.solved = new Set();
-    state.myFeel = new Map();
-    state.solvesByProblem = new Map();
-    if (uid) {
-      unsubscribeSolves = onSnapshot(solvesRef, snapshot => {
-        const byProblem = new Map(), mine = new Set(), myFeel = new Map();
-        snapshot.docs.forEach(d => {
-          const s = d.data();
-          if (!s.problemId) return;
-          if (!byProblem.has(s.problemId)) byProblem.set(s.problemId, []);
-          byProblem.get(s.problemId).push(s.feelGrade || "");
-          if (s.uid === uid) {
-            mine.add(s.problemId);
-            if (s.feelGrade) myFeel.set(s.problemId, s.feelGrade);
-          }
-        });
-        state.solvesByProblem = byProblem;
-        state.solved = mine;
-        state.myFeel = myFeel;
-        refreshCards();
-        renderSolveButton();
-      }, error => {
-        console.error(error);
-        setMessage("solveMessage", `푼 문제 기록을 불러오지 못했습니다: ${error.code || error.message}`, "error");
+    unsubscribeSolves = onSnapshot(solvesRef, snapshot => {
+      const byProblem = new Map(), mine = new Set(), myFeel = new Map();
+      snapshot.docs.forEach(d => {
+        const s = d.data();
+        if (!s.problemId) return;
+        if (!byProblem.has(s.problemId)) byProblem.set(s.problemId, []);
+        byProblem.get(s.problemId).push(s.feelGrade || "");
+        if (uid && s.uid === uid) {
+          mine.add(s.problemId);
+          if (s.feelGrade) myFeel.set(s.problemId, s.feelGrade);
+        }
       });
-    }
+      state.solvesByProblem = byProblem;
+      state.solved = mine;
+      state.myFeel = myFeel;
+      refreshCards();
+      renderSolveButton();
+    }, error => {
+      console.error(error);
+      setMessage("solveMessage", `푼 문제 기록을 불러오지 못했습니다: ${error.code || error.message}`, "error");
+    });
     refreshCards();
     renderSolveButton();
   }
