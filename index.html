@@ -80,7 +80,8 @@
     .detail-photo-actions .btn { flex:1; min-width:0; padding:11px 4px; font-size:13px; white-space:nowrap; }
     .solved-badge { display:inline-block; margin-left:6px; padding:2px 8px; border-radius:999px; background:#dcfce7; color:#15803d; font-size:12px; font-weight:800; vertical-align:middle; white-space:nowrap; }
     #solveToggleBtn.solved { background:#16a34a; color:#ffffff; }
-    .feel-grade { margin-top:4px; font-size:11px; font-weight:700; color:#b45309; white-space:nowrap; text-align:right; }
+    .grade-stack { display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
+    .feel-grade { font-size:11px; font-weight:700; color:#b45309; white-space:nowrap; }
     .feel-row { display:flex; align-items:center; gap:10px; margin:0 0 8px; font-size:13px; font-weight:700; }
     .feel-row select { flex:1; padding:9px 10px; border:1px solid var(--line); border-radius:10px; background:#ffffff; font-size:14px; }
     .hold { position:absolute; width:var(--hold-size,12px); height:var(--hold-size,12px); border:min(3px, calc(var(--hold-size,12px) * .15)) solid transparent; border-radius:50%; background:var(--hold-normal, rgba(160,215,255,.75)); transform:translate(-50%,-50%); box-shadow:0 0 0 max(1px, calc(var(--hold-size,12px) * .1)) rgba(255,255,255,.95),0 1px 6px rgba(0,0,0,.28); pointer-events:auto; cursor:pointer; padding:0; z-index:2; }
@@ -1172,8 +1173,10 @@
         <div><div class="problem-name">${escapeHtml(p.name || "이름 없는 문제")}${solvedBadge}</div>
         <div class="problem-meta">${typeName(p.type)} · 홀드 ${(p.holds || []).length}개${escapeHtml(setterAndDate(p))}</div></div>
         <div class="card-side">
-          <div class="grade">${escapeHtml(p.grade || "-")}</div>
-          ${feel ? `<div class="feel-grade">체감 ${escapeHtml(feel.grade)}</div>` : ""}
+          <div class="grade-stack">
+            <div class="grade">${escapeHtml(p.grade || "-")}</div>
+            ${feel ? `<div class="feel-grade">사용자 체감 ${escapeHtml(feel.grade)} (${feel.count}/${feel.total})</div>` : ""}
+          </div>
           ${editButton}
         </div>
         ${actions}
