@@ -1656,19 +1656,25 @@
   function watchMembers() {
     if (unsubscribeMembers) { unsubscribeMembers(); unsubscribeMembers = null; }
     if (!state.isAdmin) return;
-    unsubscribeMembers = onSnapshot(query(membersRef, orderBy("createdAt", "asc")), snapshot => {
-      const members = snapshot.docs.map(d => d.data());
+    // createdAt으로 정렬하는 쿼리는 그 필드가 없는 문서를 빼 버리므로, 전체를 받아 화면에서 정렬합니다.
+    const millisOf = m => (m.createdAt && m.createdAt.toMillis ? m.createdAt.toMillis() : 0);
+    unsubscribeMembers = onSnapshot(membersRef, snapshot => {
+      const members = snapshot.docs
+        .map(d => ({ uid: d.id, ...d.data() }))
+        .sort((a, b) => millisOf(a) - millisOf(b));
       const countText = `총 ${members.length}명`;
       $("memberCount").textContent = countText;
       $("memberListCount").textContent = countText;
       $("memberList").innerHTML = members.length
         ? members.map(m => {
-            const joined = m.createdAt && m.createdAt.toDate ? m.createdAt.toDate().toLocaleDateString("ko-KR") : "";
-            return `<li><strong>${escapeHtml(m.id || "")}</strong><span>${escapeHtml(joined)}</span></li>`;
+            const joined = m.createdAt && m.createdAt.toDate ? m.createdAt.toDate().toLocaleDateString("ko-KR") : "날짜 없음";
+            return `<li><strong>${escapeHtml(m.id || "(아이디 없음)")}</strong><span>${escapeHtml(joined)}</span></li>`;
           }).join("")
         : `<li class="small">아직 기록된 회원이 없습니다.</li>`;
     }, error => {
       console.error(error);
+      $("memberCount").textContent = "불러오기 실패";
+      $("memberListCount").textContent = "불러오지 못했습니다";
       $("memberList").innerHTML = `<li class="small">회원 목록을 불러오지 못했습니다. Firestore 규칙을 확인해 주세요.</li>`;
     });
   }
