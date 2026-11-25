@@ -78,6 +78,8 @@
     .wall.original-photo img.wall-image { filter:none; }
     .detail-photo-actions { display:flex; gap:8px; margin-bottom:10px; }
     .detail-photo-actions .btn { flex:1; }
+    .solved-badge { display:inline-block; margin-left:6px; padding:2px 8px; border-radius:999px; background:#dcfce7; color:#15803d; font-size:12px; font-weight:800; vertical-align:middle; white-space:nowrap; }
+    #solveToggleBtn.solved { background:#16a34a; color:#ffffff; }
     .hold { position:absolute; width:var(--hold-size,12px); height:var(--hold-size,12px); border:min(3px, calc(var(--hold-size,12px) * .15)) solid transparent; border-radius:50%; background:var(--hold-normal, rgba(160,215,255,.75)); transform:translate(-50%,-50%); box-shadow:0 0 0 max(1px, calc(var(--hold-size,12px) * .1)) rgba(255,255,255,.95),0 1px 6px rgba(0,0,0,.28); pointer-events:auto; cursor:pointer; padding:0; z-index:2; }
     /* 손가락으로 누르기 쉽도록 보이지 않는 터치 영역을 홀드 바깥으로 6px씩 넓힙니다. */
     .hold::before { content:""; position:absolute; inset:-6px; border-radius:50%; }
@@ -150,7 +152,7 @@
       </div>
       <div class="header-actions">
         <div class="auth-status" id="authStatus">로그인 확인 중…</div>
-        <button id="adminLoginBtn" class="mini-login" type="button">관리자 로그인</button>
+        <button id="loginOpenBtn" class="mini-login" type="button">로그인</button>
         <button id="logoutBtn" class="mini-login hidden" type="button">로그아웃</button>
       </div>
     </div>
@@ -188,17 +190,6 @@
     </section>
 
     <section id="createScreen" class="hidden">
-      <div id="loginPanel" class="panel">
-        <h2 class="section-title">관리자 로그인</h2>
-        <p class="muted">문제 등록 및 관리는 관리자 계정만 사용할 수 있습니다.</p>
-        <div class="field"><label for="email">아이디</label><input id="email" type="text" autocomplete="username" placeholder="관리자 아이디" /></div>
-        <div class="field"><label for="password">비밀번호</label><input id="password" type="password" autocomplete="current-password" placeholder="비밀번호 (6자 이상)" /></div>
-        <div class="row">
-          <button id="loginBtn" class="btn" type="button">관리자 로그인</button>
-        </div>
-        <div id="authMessage" class="message" aria-live="polite"></div>
-      </div>
-
       <div id="editorPanel" class="panel hidden">
         <div class="panel-head">
           <h2 class="section-title">관리자 페이지 · 새 문제 만들기</h2>
@@ -271,7 +262,9 @@
     <div class="detail-photo-actions">
       <button id="detailOriginalBtn" class="btn secondary" type="button" aria-pressed="false">사진 원본보기</button>
       <button id="detailDownloadBtn" class="btn secondary" type="button">사진 다운로드</button>
+      <button id="solveToggleBtn" class="btn secondary hidden" type="button" aria-pressed="false">푼 문제로 체크</button>
     </div>
+    <div id="solveMessage" class="message" aria-live="polite"></div>
     <div id="zoomSlot">
     <div id="zoomHome" class="zoom-home">
     <div class="zoom-bar">
@@ -285,6 +278,23 @@
     </div>
     </div>
     </div>
+  </div>
+</div>
+
+<div id="authBackdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <div><h2 id="authTitle">로그인</h2><div class="muted small">아이디와 비밀번호로 로그인하거나 회원가입할 수 있습니다.</div></div>
+      <button id="closeAuth" class="close" type="button" aria-label="닫기">×</button>
+    </div>
+    <div class="type-tabs">
+      <button type="button" class="active" data-auth-mode="login" aria-pressed="true">로그인</button>
+      <button type="button" data-auth-mode="signup" aria-pressed="false">회원가입</button>
+    </div>
+    <div class="field"><label for="authId">아이디</label><input id="authId" type="text" autocomplete="username" autocapitalize="none" placeholder="영문 소문자·숫자 3~20자" /></div>
+    <div class="field"><label for="authPassword">비밀번호</label><input id="authPassword" type="password" autocomplete="current-password" placeholder="6자 이상" /></div>
+    <button id="authSubmitBtn" class="btn full" type="button">로그인</button>
+    <div id="authMessage" class="message" aria-live="polite"></div>
   </div>
 </div>
 
@@ -310,11 +320,11 @@
   // Firebase SDK 버전은 아래 URL에서 동일하게 고정합니다.
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
   import {
-    getAuth, onAuthStateChanged, signInWithEmailAndPassword,
+    getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
     signOut
   } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
   import {
-    getFirestore, collection, addDoc, setDoc, getDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp
+    getFirestore, collection, addDoc, setDoc, getDoc, deleteDoc, doc, onSnapshot, query, orderBy, where, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
   const app = initializeApp(firebaseConfig);
@@ -322,10 +332,17 @@
   const db = getFirestore(app);
 
   // ───────── 상수 ─────────
+  // 관리자 계정: 아이디 superb (이메일 superb@superb.com). 회원가입으로는 만들 수 없는 예약 아이디입니다.
+  const ADMIN_ID = "superb";
   const ADMIN_EMAIL = "superb@superb.com";
-  // 로그인 아이디가 @ 없이 입력되면 이 도메인을 붙여 이메일 계정으로 바꿉니다. (예: superb → superb@superb.com)
-  const ADMIN_DOMAIN = "superb.com";
+  // 일반 회원은 "아이디@members.superb.com" 이메일 계정으로 저장됩니다. 실제 메일을 받지 않는 내부 식별용 주소입니다.
+  const MEMBER_DOMAIN = "members.superb.com";
+  const accountEmail = id => (id === ADMIN_ID ? ADMIN_EMAIL : `${id}@${MEMBER_DOMAIN}`);
+  const accountIdOf = user => (user.email || "").split("@")[0];
   const DEFAULT_HOLD_SIZE = 10;
+  // 다리(발) 홀드는 크기를 6px로 고정합니다. 크기 슬라이더와 손잡이로 바꿀 수 없습니다.
+  const LEG_ROLE = "leg", LEG_HOLD_SIZE = 6;
+  const holdSizeOf = h => (h.role === LEG_ROLE ? LEG_HOLD_SIZE : (h.size || DEFAULT_HOLD_SIZE));
   const DEFAULT_ROLE = "normal";
   const ROLE_NAMES = { normal: "일반", start: "스타트", finish: "완등", leg: "다리" };
   // 홀드 색: 화면(CSS 변수)과 사진 다운로드(canvas)가 같은 값을 씁니다.
@@ -363,13 +380,17 @@
   });
 
   const state = {
-    user: null, isAdmin: false, problems: [], listType: "bouldering", detailId: "",
+    user: null, isAdmin: false, solved: new Set(), problems: [], listType: "bouldering", detailId: "",
     holds: [], previewUrl: "", wallFile: null, wallStored: "", holdSize: DEFAULT_HOLD_SIZE, eraseMode: false, selectedHoldIndex: -1,
     openActionId: "",     // 목록에서 '수정'을 눌러 펼친 문제 id
     editingProblem: null  // 문제변경 중이면 원본 문제 정보, 아니면 null
   };
   const drag = { active: null, ignoreClick: false }; // 홀드 드래그 상태 (active: { index, pointerId, startX, startY, moved })
   const problemsRef = collection(db, "problems");
+  // 푼 문제 기록: 문서 id를 `${uid}_${problemId}`로 만들어 한 사람이 한 문제를 한 번만 체크하게 합니다.
+  const solvesRef = collection(db, "solves");
+  const solveDoc = (uid, problemId) => doc(db, "solves", `${uid}_${problemId}`);
+  let problemsReady = false; // 문제 목록을 한 번이라도 받았는지 (로딩 중에 빈 목록을 그리지 않으려고)
 
   // 색과 필터 값을 CSS 변수로 넘겨서 화면과 다운로드가 한 곳의 값을 쓰게 합니다.
   const rootStyle = document.documentElement.style;
@@ -457,7 +478,7 @@
       dot.type = "button";
       dot.className = `hold ${role}${editable && index === state.selectedHoldIndex ? " selected" : ""}`;
       dot.style.left = `${hold.x * 100}%`; dot.style.top = `${hold.y * 100}%`;
-      dot.style.setProperty("--hold-size", `${hold.size || DEFAULT_HOLD_SIZE}px`);
+      dot.style.setProperty("--hold-size", `${holdSizeOf(hold)}px`);
       dot.setAttribute("aria-label", `${ROLE_NAMES[role] || ROLE_NAMES.normal} 홀드 ${index + 1}`);
       if (numbered && isNormal) {
         const no = document.createElement("span");
@@ -484,7 +505,8 @@
       } else {
         // 처음 누르면 선택만 합니다. 위치를 옮길 때 색이 바뀌지 않도록 색은 그대로 둡니다.
         state.selectedHoldIndex = index;
-        state.holdSize = hold.size || DEFAULT_HOLD_SIZE;
+        // 다리 홀드를 고르면 새 포인트의 기본 크기는 바꾸지 않습니다.
+        if (hold.role !== LEG_ROLE) state.holdSize = hold.size || DEFAULT_HOLD_SIZE;
       }
       refreshEditor();
     });
@@ -500,9 +522,15 @@
   }
   function updateHoldTools() {
     const selected = state.selectedHoldIndex >= 0 ? state.holds[state.selectedHoldIndex] : null;
+    const isLeg = Boolean(selected && selected.role === LEG_ROLE);
+    // 다리 홀드가 아니면 슬라이더는 선택한 홀드의 원래 크기를 보여 줍니다.
+    // 다리 홀드는 6px로 그리지만, 원래 크기(hold.size)는 그대로 남겨 두어 다른 종류로 바꾸면 되돌아갑니다.
+    if (selected && !isLeg) state.holdSize = holdSizeOf(selected);
+    const shownSize = isLeg ? LEG_HOLD_SIZE : state.holdSize;
     $("holdSizeLabel").textContent = selected ? "선택 포인트 크기" : "새 포인트 크기";
-    $("holdSizeValue").textContent = `${state.holdSize}px`;
-    $("holdSize").value = String(state.holdSize);
+    $("holdSizeValue").textContent = `${shownSize}px`;
+    $("holdSize").value = String(shownSize);
+    $("holdSize").disabled = isLeg;
     $("eraseModeBtn").classList.toggle("active-tool", state.eraseMode);
     $("eraseModeBtn").setAttribute("aria-pressed", String(state.eraseMode));
     $("eraseModeBtn").textContent = state.eraseMode ? "지우개 모드: 켜짐" : "지우개 모드: 꺼짐";
@@ -514,11 +542,12 @@
     const handle = $("sizeHandle");
     const index = state.selectedHoldIndex;
     const hold = index >= 0 ? state.holds[index] : null;
-    const show = Boolean(state.isAdmin && hold && !state.eraseMode);
+    // 다리 홀드는 크기를 바꿀 수 없으므로 손잡이를 보이지 않습니다.
+    const show = Boolean(state.isAdmin && hold && !state.eraseMode && hold.role !== LEG_ROLE);
     handle.classList.toggle("hidden", !show);
     if (!show) return;
     // 손잡이 중심을 홀드 테두리(반지름 + 선택 테두리 바깥)보다 조금 바깥, 오른쪽 아래(약 32도) 지점에 둡니다.
-    const reach = (hold.size || DEFAULT_HOLD_SIZE) / 2 + 6;
+    const reach = holdSizeOf(hold) / 2 + 6;
     handle.style.left = `calc(${hold.x * 100}% + ${(reach * 0.85).toFixed(2)}px)`;
     handle.style.top = `calc(${hold.y * 100}% + ${(reach * 0.53).toFixed(2)}px)`;
   }
@@ -549,12 +578,12 @@
     $("navCreate").classList.toggle("active", !isList);
   }
   function renderAuth() {
-    const loggedInAdmin = Boolean(state.user && state.isAdmin);
-    $("authStatus").textContent = loggedInAdmin ? "관리자 로그인됨" : "게스트";
-    $("adminLoginBtn").classList.toggle("hidden", loggedInAdmin);
-    $("logoutBtn").classList.toggle("hidden", !loggedInAdmin);
+    const loggedIn = Boolean(state.user);
+    const loggedInAdmin = Boolean(loggedIn && state.isAdmin);
+    $("authStatus").textContent = !loggedIn ? "게스트" : loggedInAdmin ? "관리자 로그인됨" : `${accountIdOf(state.user)}님`;
+    $("loginOpenBtn").classList.toggle("hidden", loggedIn);
+    $("logoutBtn").classList.toggle("hidden", !loggedIn);
     $("navCreate").classList.toggle("hidden", !loggedInAdmin);
-    $("loginPanel").classList.toggle("hidden", loggedInAdmin);
     $("editorPanel").classList.toggle("hidden", !loggedInAdmin);
     if (!loggedInAdmin && !$("listScreen").classList.contains("hidden")) {
       $("navCreate").classList.remove("active");
@@ -562,7 +591,6 @@
   }
 
   $("navList").addEventListener("click", () => switchScreen("list"));
-  $("adminLoginBtn").addEventListener("click", () => switchScreen("create"));
   $("navCreate").addEventListener("click", () => switchScreen("create"));
   onInput($("problemType"), () => { updateEditorGrades(); updateHoldTools(); });
   document.querySelectorAll("[data-type]").forEach(btn => btn.addEventListener("click", () => {
@@ -613,6 +641,8 @@
   onInput($("photoVeilTransparency"), applyPhotoStyle);
   applyPhotoStyle();
   $("holdSize").addEventListener("input", event => {
+    // 다리 홀드가 선택된 동안에는 크기를 바꾸지 않습니다.
+    if (state.selectedHoldIndex >= 0 && state.holds[state.selectedHoldIndex]?.role === LEG_ROLE) return;
     state.holdSize = Number(event.target.value);
     const index = state.selectedHoldIndex;
     if (index >= 0 && state.holds[index]) {
@@ -628,7 +658,7 @@
   const HOLD_SIZE_MIN = 4, HOLD_SIZE_MAX = 20;
   function setSelectedHoldSize(size) {
     const index = state.selectedHoldIndex;
-    if (index < 0 || !state.holds[index]) return;
+    if (index < 0 || !state.holds[index] || state.holds[index].role === LEG_ROLE) return;
     state.holdSize = Math.round(clampRange(size, HOLD_SIZE_MIN, HOLD_SIZE_MAX));
     state.holds[index].size = state.holdSize;
     const node = $("editorWall").querySelectorAll(".hold")[index];
@@ -658,7 +688,7 @@
         // 손잡이를 잡으면 크기 조절입니다. 홀드 중심에서 손가락까지의 거리 비율로 크기를 정합니다.
         const rect = editorWall.getBoundingClientRect();
         const cx = rect.left + hold.x * rect.width, cy = rect.top + hold.y * rect.height;
-        resizeDrag = { pointerId: e.pointerId, cx, cy, startDist: Math.hypot(e.clientX - cx, e.clientY - cy) || 1, startSize: hold.size || DEFAULT_HOLD_SIZE };
+        resizeDrag = { pointerId: e.pointerId, cx, cy, startDist: Math.hypot(e.clientX - cx, e.clientY - cy) || 1, startSize: holdSizeOf(hold) };
         try { $("sizeHandle").setPointerCapture(e.pointerId); } catch (_) {}
         return;
       }
@@ -772,20 +802,126 @@
     "auth/network-request-failed":"네트워크 연결을 확인해 주세요."
   };
   const authError = error => AUTH_ERRORS[error.code] || `인증 오류: ${error.message}`;
-  $("loginBtn").addEventListener("click", async () => {
+  // 아이디는 영문 소문자·숫자·_·- 조합 3~20자입니다.
+  const ID_PATTERN = /^[a-z0-9_-]{3,20}$/;
+  const MIN_PASSWORD_LENGTH = 6;
+  let authMode = "login";
+  let authHistoryPushed = false;
+  function setAuthMode(mode) {
+    authMode = mode === "signup" ? "signup" : "login";
+    document.querySelectorAll("[data-auth-mode]").forEach(button => {
+      const active = button.dataset.authMode === authMode;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    $("authTitle").textContent = authMode === "signup" ? "회원가입" : "로그인";
+    $("authSubmitBtn").textContent = authMode === "signup" ? "가입하고 시작하기" : "로그인";
+    $("authPassword").setAttribute("autocomplete", authMode === "signup" ? "new-password" : "current-password");
     setMessage("authMessage", "");
-    const id = $("email").value.trim().toLowerCase();
-    const email = id.includes("@") ? id : `${id}@${ADMIN_DOMAIN}`;
-    if (email !== ADMIN_EMAIL) {
-      setMessage("authMessage", "관리자 계정만 로그인할 수 있습니다.", "error");
+  }
+  function openAuthModal(mode) {
+    setAuthMode(mode);
+    $("authPassword").value = "";
+    $("authBackdrop").classList.remove("hidden");
+    // 뒤로가기 한 번이 로그인 창만 닫도록 기록을 하나 쌓아 둡니다.
+    if (!authHistoryPushed) { history.pushState({ climbAuth: true }, ""); authHistoryPushed = true; }
+    $("authId").focus();
+  }
+  function closeAuthView() {
+    $("authBackdrop").classList.add("hidden");
+    authHistoryPushed = false;
+  }
+  function hideAuthModal() {
+    if (authHistoryPushed) history.back();
+    else closeAuthView();
+  }
+  async function submitAuth() {
+    setMessage("authMessage", "");
+    const id = $("authId").value.trim().toLowerCase();
+    const password = $("authPassword").value;
+    if (!ID_PATTERN.test(id)) {
+      setMessage("authMessage", "아이디는 영문 소문자, 숫자, _, - 를 사용해 3~20자로 입력해 주세요.", "error");
       return;
     }
+    const isSignup = authMode === "signup";
+    if (isSignup && id === ADMIN_ID) {
+      setMessage("authMessage", "사용할 수 없는 아이디입니다.", "error");
+      return;
+    }
+    if (isSignup && password.length < MIN_PASSWORD_LENGTH) {
+      setMessage("authMessage", `비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 합니다.`, "error");
+      return;
+    }
+    const button = $("authSubmitBtn");
+    button.disabled = true;
     try {
-      await signInWithEmailAndPassword(auth, email, $("password").value);
-      // 모바일에서 로그인 직후 화면이 갱신되지 않는 문제를 피하려고, 로그인 성공 시 한 번만 새로고침합니다.
-      // (로그인 상태는 Firebase가 저장하므로 새로고침 후에도 유지되고, 이 코드는 다시 실행되지 않습니다.)
+      const email = accountEmail(id);
+      if (isSignup) await createUserWithEmailAndPassword(auth, email, password);
+      else await signInWithEmailAndPassword(auth, email, password);
+      // 모바일에서 로그인 직후 화면이 갱신되지 않는 문제를 피하려고, 성공 시 한 번만 새로고침합니다.
+      // (로그인 상태는 Firebase가 저장하므로 새로고침 후에도 유지됩니다.)
       location.reload();
-    } catch (e) { setMessage("authMessage", authError(e), "error"); }
+    } catch (e) {
+      setMessage("authMessage", authError(e), "error");
+      button.disabled = false;
+    }
+  }
+  $("loginOpenBtn").addEventListener("click", () => openAuthModal("login"));
+  document.querySelectorAll("[data-auth-mode]").forEach(button => {
+    button.addEventListener("click", () => setAuthMode(button.dataset.authMode));
+  });
+  $("authSubmitBtn").addEventListener("click", submitAuth);
+  ["authId", "authPassword"].forEach(inputId => {
+    $(inputId).addEventListener("keydown", e => { if (e.key === "Enter") submitAuth(); });
+  });
+  $("closeAuth").addEventListener("click", hideAuthModal);
+  $("authBackdrop").addEventListener("click", e => { if (e.target === e.currentTarget) hideAuthModal(); });
+
+  // ───────── 푼 문제 체크 ─────────
+  let unsubscribeSolves = null;
+  function refreshCards() { if (problemsReady) renderProblemList(); }
+  // 로그인한 사람의 푼 문제 목록을 실시간으로 받아 목록 카드와 상세 버튼에 반영합니다.
+  function watchSolves(uid) {
+    if (unsubscribeSolves) { unsubscribeSolves(); unsubscribeSolves = null; }
+    state.solved = new Set();
+    if (uid) {
+      unsubscribeSolves = onSnapshot(query(solvesRef, where("uid", "==", uid)), snapshot => {
+        state.solved = new Set(snapshot.docs.map(d => d.data().problemId));
+        refreshCards();
+        renderSolveButton();
+      }, error => {
+        console.error(error);
+        setMessage("solveMessage", `푼 문제 기록을 불러오지 못했습니다: ${error.code || error.message}`, "error");
+      });
+    }
+    refreshCards();
+    renderSolveButton();
+  }
+  function renderSolveButton() {
+    const btn = $("solveToggleBtn");
+    btn.classList.toggle("hidden", !state.user);
+    const solved = state.solved.has(state.detailId);
+    btn.textContent = solved ? "✔ 푼 문제 (체크 해제)" : "푼 문제로 체크";
+    btn.classList.toggle("solved", solved);
+    btn.setAttribute("aria-pressed", String(solved));
+  }
+  $("solveToggleBtn").addEventListener("click", async () => {
+    const user = state.user, problemId = state.detailId;
+    if (!user || !problemId) return;
+    const wasSolved = state.solved.has(problemId);
+    const btn = $("solveToggleBtn");
+    setMessage("solveMessage", "");
+    btn.disabled = true;
+    try {
+      if (wasSolved) await deleteDoc(solveDoc(user.uid, problemId));
+      else await setDoc(solveDoc(user.uid, problemId), { uid: user.uid, problemId, solvedAt: serverTimestamp() });
+    } catch (e) {
+      const detail = e.code ? `${e.code}: ${e.message}` : e.message;
+      setMessage("solveMessage", `저장에 실패했습니다: ${detail}`, "error");
+    } finally {
+      btn.disabled = false;
+      renderSolveButton();
+    }
   });
   $("logoutBtn").addEventListener("click", async () => {
     try { await signOut(auth); resetEditor(); }
@@ -946,6 +1082,7 @@
   function renderCard(p) {
     const id = escapeHtml(p.id);
     const isOpen = state.openActionId === p.id;
+    const solvedBadge = state.solved.has(p.id) ? '<span class="solved-badge">✔ 푼 문제</span>' : "";
     const editButton = state.isAdmin
       ? `<button class="btn secondary compact edit-open" type="button" data-edit-id="${id}" aria-expanded="${isOpen}">수정</button>`
       : "";
@@ -957,7 +1094,7 @@
       : "";
     return `
       <article class="problem-card" data-id="${id}" tabindex="0" role="button" aria-label="${escapeHtml(p.name)} 상세 보기">
-        <div><div class="problem-name">${escapeHtml(p.name || "이름 없는 문제")}</div>
+        <div><div class="problem-name">${escapeHtml(p.name || "이름 없는 문제")}${solvedBadge}</div>
         <div class="problem-meta">${typeName(p.type)} · 홀드 ${(p.holds || []).length}개${escapeHtml(setterAndDate(p))}</div></div>
         <div class="card-side">
           <div class="grade">${escapeHtml(p.grade || "-")}</div>
@@ -1103,6 +1240,7 @@
     const p = findProblem(id);
     if (!p) return;
     state.detailId = id;
+    renderSolveButton();
     $("detailTitle").textContent = p.name || "이름 없는 문제";
     $("detailMeta").textContent = `${typeName(p.type)} · ${p.grade || "-"} · 홀드 ${(p.holds || []).length}개${setterAndDate(p)}`;
     const wall = $("detailWall");
@@ -1156,7 +1294,7 @@
   // 홀드 하나를 화면과 같은 모양(흰 테두리, 그림자, 지구력 번호)으로 캔버스에 그립니다.
   function drawHold(ctx, hold, { cx, cy, scale, number }) {
     const role = hold.role || DEFAULT_ROLE;
-    const size = (hold.size || DEFAULT_HOLD_SIZE) * scale;
+    const size = holdSizeOf(hold) * scale;
     const r = size / 2;
     ctx.shadowColor = "rgba(0,0,0,.28)";
     ctx.shadowBlur = 6 * scale;
@@ -1251,12 +1389,14 @@
   window.addEventListener("popstate", () => {
     if (isFullOpen()) closeFullView();
     else if (!$("detailBackdrop").classList.contains("hidden")) closeDetailView();
+    else if (!$("authBackdrop").classList.contains("hidden")) closeAuthView();
   });
   $("closeDetail").addEventListener("click", hideDetail);
   $("detailBackdrop").addEventListener("click", e => { if (e.target === e.currentTarget) hideDetail(); });
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
     if (isFullOpen()) hideFullView();
+    else if (!$("authBackdrop").classList.contains("hidden")) hideAuthModal();
     else hideDetail();
   });
 
@@ -1401,13 +1541,14 @@
     state.user = user;
     state.isAdmin = Boolean(user && (user.email || "").toLowerCase() === ADMIN_EMAIL);
     renderAuth();
-    if (user && !state.isAdmin) signOut(auth);
+    watchSolves(user ? user.uid : "");
     if (!state.isAdmin) { state.wallStored = ""; switchScreen("list"); }
     else loadWallPhoto();
   });
   // 모든 방문자에게 공개된 문제 목록을 실시간으로 구독합니다.
   onSnapshot(query(problemsRef, orderBy("createdAt", "desc")), snapshot => {
     state.problems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    problemsReady = true;
     renderProblemList();
   }, error => {
     console.error(error);
