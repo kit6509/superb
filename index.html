@@ -53,7 +53,6 @@
     .panel-head { display:flex; justify-content:space-between; align-items:center; gap:10px; }
     .panel-head .section-title { margin:0; }
     .panel-head .btn { min-height:36px; padding:8px 12px; }
-    .card-side { display:flex; align-items:center; gap:8px; flex:none; }
     .wall-wrap { margin-top:12px; }
     .wall { position:relative; width:100%; aspect-ratio:4/5; overflow:hidden; border-radius:14px; border:0; background-color:#f3f4f6;
       background-image:linear-gradient(rgba(0,0,0,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.06) 1px,transparent 1px);
@@ -80,9 +79,7 @@
     .detail-photo-actions .btn { flex:1; min-width:0; padding:11px 4px; font-size:13px; white-space:nowrap; }
     .solved-badge { display:inline-block; margin-left:6px; padding:2px 8px; border-radius:999px; background:#dcfce7; color:#15803d; font-size:12px; font-weight:800; vertical-align:middle; white-space:nowrap; }
     #solveToggleBtn.solved { background:#16a34a; color:#ffffff; }
-    .grade-stack { display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
-    .problem-card > div:first-child { flex:1 1 0; min-width:0; }
-    .feel-grade { font-size:11px; font-weight:700; color:#b45309; white-space:nowrap; }
+    .feel-grade { grid-column:2; grid-row:2; justify-self:end; font-size:11px; font-weight:700; color:#b45309; white-space:nowrap; }
     .feel-row { display:flex; align-items:center; gap:10px; margin:0 0 8px; font-size:13px; font-weight:700; }
     .feel-row select { flex:1; padding:9px 10px; border:1px solid var(--line); border-radius:10px; background:#ffffff; font-size:14px; }
     .hold { position:absolute; width:var(--hold-size,12px); height:var(--hold-size,12px); border:min(3px, calc(var(--hold-size,12px) * .15)) solid transparent; border-radius:50%; background:var(--hold-normal, rgba(160,215,255,.75)); transform:translate(-50%,-50%); box-shadow:0 0 0 max(1px, calc(var(--hold-size,12px) * .1)) rgba(255,255,255,.95),0 1px 6px rgba(0,0,0,.28); pointer-events:auto; cursor:pointer; padding:0; z-index:2; }
@@ -109,14 +106,17 @@
     .type-tabs button { flex:1; padding:11px; border:1px solid var(--line); border-radius:11px; background:#ffffff; color:#6b7280; font-weight:800; }
     .type-tabs button.active { border-color:var(--primary); background:#fef3c7; color:#92400e; }
     .problem-list { display:flex; flex-direction:column; gap:9px; }
-    .problem-card { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; padding:14px; border:1px solid var(--line); border-radius:14px; background:#ffffff; cursor:pointer; }
-    .problem-actions { display:flex; gap:8px; width:100%; justify-content:flex-end; }
+    /* 카드: 이름·등급은 1행, 문제 정보·체감 난이도는 2행으로 맞춥니다. 관리자는 오른쪽에 수정 버튼 칸이 추가됩니다. */
+    .problem-card { display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:12px; row-gap:4px; align-items:center; padding:14px; border:1px solid var(--line); border-radius:14px; background:#ffffff; cursor:pointer; }
+    .problem-card.has-edit { grid-template-columns:minmax(0,1fr) auto auto; }
+    .problem-card .edit-open { grid-column:3; grid-row:1 / span 2; align-self:stretch; min-width:64px; padding:0 14px; font-size:15px; font-weight:800; border-radius:12px; }
+    .problem-actions { grid-column:1 / -1; display:flex; gap:8px; justify-content:flex-end; margin-top:6px; }
     .problem-card { transition:box-shadow .15s, transform .15s; }
     .problem-card:hover { box-shadow:0 8px 22px rgba(15,23,42,.12); transform:translateY(-1px); }
     .problem-card:active { background:#f9fafb; }
-    .problem-name { font-weight:800; overflow-wrap:anywhere; }
-    .problem-meta { margin-top:5px; color:var(--muted); font-size:12px; }
-    .grade { flex:none; border-radius:10px; padding:7px 10px; background:var(--primary); color:#111; font-weight:900; }
+    .problem-name { grid-column:1; grid-row:1; font-weight:800; overflow-wrap:anywhere; }
+    .problem-meta { grid-column:1; grid-row:2; color:var(--muted); font-size:12px; }
+    .grade { grid-column:2; grid-row:1; justify-self:end; border-radius:10px; padding:7px 10px; background:var(--primary); color:#111; font-weight:900; }
     .empty { padding:26px 12px; text-align:center; color:var(--muted); font-size:14px; }
     .hidden { display:none !important; }
     .message { margin:10px 0; font-size:13px; line-height:1.5; }
@@ -1165,16 +1165,12 @@
         </div>`
       : "";
     return `
-      <article class="problem-card" data-id="${id}" tabindex="0" role="button" aria-label="${escapeHtml(p.name)} 상세 보기">
-        <div><div class="problem-name">${escapeHtml(p.name || "이름 없는 문제")}${solvedBadge}</div>
-        <div class="problem-meta">${typeName(p.type)} · 홀드 ${(p.holds || []).length}개${escapeHtml(setterAndDate(p))}</div></div>
-        <div class="card-side">
-          <div class="grade-stack">
-            <div class="grade">${escapeHtml(p.grade || "-")}</div>
-            ${feel ? `<div class="feel-grade">사용자 체감 ${escapeHtml(feel.grade)} (${feel.count}/${feel.total})</div>` : ""}
-          </div>
-          ${editButton}
-        </div>
+      <article class="problem-card${state.isAdmin ? " has-edit" : ""}" data-id="${id}" tabindex="0" role="button" aria-label="${escapeHtml(p.name)} 상세 보기">
+        <div class="problem-name">${escapeHtml(p.name || "이름 없는 문제")}${solvedBadge}</div>
+        <div class="grade">${escapeHtml(p.grade || "-")}</div>
+        <div class="problem-meta">${typeName(p.type)} · 홀드 ${(p.holds || []).length}개${escapeHtml(setterAndDate(p))}</div>
+        ${feel ? `<div class="feel-grade">사용자 체감 ${escapeHtml(feel.grade)} (${feel.count}/${feel.total})</div>` : ""}
+        ${editButton}
         ${actions}
       </article>`;
   }
