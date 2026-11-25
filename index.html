@@ -80,6 +80,11 @@
     .solved-badge { display:inline-block; margin-left:6px; padding:2px 8px; border-radius:999px; background:#dcfce7; color:#15803d; font-size:12px; font-weight:800; vertical-align:middle; white-space:nowrap; }
     #solveToggleBtn.solved { background:#16a34a; color:#ffffff; }
     .feel-grade { grid-column:2; grid-row:2; justify-self:end; font-size:11px; font-weight:700; color:#b45309; white-space:nowrap; }
+    .member-count { flex:none; font-size:14px; font-weight:800; color:#b45309; white-space:nowrap; }
+    .member-list { list-style:none; margin:10px 0 0; padding:0; display:flex; flex-direction:column; gap:6px; max-height:300px; overflow-y:auto; }
+    .member-list li { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 12px; border:1px solid var(--line); border-radius:10px; background:#ffffff; }
+    .member-list li strong { overflow-wrap:anywhere; }
+    .member-list li span { flex:none; color:var(--muted); font-size:12px; }
     .feel-row { display:flex; align-items:center; gap:10px; margin:0 0 8px; font-size:13px; font-weight:700; }
     .feel-row select { flex:1; padding:9px 10px; border:1px solid var(--line); border-radius:10px; background:#ffffff; font-size:14px; }
     .hold { position:absolute; width:var(--hold-size,12px); height:var(--hold-size,12px); border:min(3px, calc(var(--hold-size,12px) * .15)) solid transparent; border-radius:50%; background:var(--hold-normal, rgba(160,215,255,.75)); transform:translate(-50%,-50%); box-shadow:0 0 0 max(1px, calc(var(--hold-size,12px) * .1)) rgba(255,255,255,.95),0 1px 6px rgba(0,0,0,.28); pointer-events:auto; cursor:pointer; padding:0; z-index:2; }
@@ -108,8 +113,7 @@
     .problem-list { display:flex; flex-direction:column; gap:9px; }
     /* 카드: 이름·등급은 1행, 문제 정보·체감 난이도는 2행으로 맞춥니다. 관리자는 오른쪽에 수정 버튼 칸이 추가됩니다. */
     .problem-card { display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:12px; row-gap:4px; align-items:center; padding:14px; border:1px solid var(--line); border-radius:14px; background:#ffffff; cursor:pointer; }
-    .problem-card.has-edit { grid-template-columns:minmax(0,1fr) auto auto; }
-    .problem-card .edit-open { grid-column:3; grid-row:1 / span 2; align-self:stretch; min-width:64px; padding:0 14px; font-size:15px; font-weight:800; border-radius:12px; }
+    .problem-name .edit-open { margin-left:8px; min-height:28px; padding:3px 10px; font-size:13px; font-weight:800; border-radius:9px; vertical-align:middle; }
     .problem-actions { grid-column:1 / -1; display:flex; gap:8px; justify-content:flex-end; margin-top:6px; }
     .problem-card { transition:box-shadow .15s, transform .15s; }
     .problem-card:hover { box-shadow:0 8px 22px rgba(15,23,42,.12); transform:translateY(-1px); }
@@ -195,6 +199,14 @@
     </section>
 
     <section id="createScreen" class="hidden">
+      <div id="memberPanel" class="panel hidden">
+        <div class="panel-head">
+          <h2 class="section-title">회원 관리</h2>
+          <span id="memberCount" class="member-count">-</span>
+        </div>
+        <ul id="memberList" class="member-list"><li class="small">불러오는 중…</li></ul>
+        <p class="small note-center">한 번이라도 로그인한 회원만 목록에 나타납니다. 비밀번호는 저장하지 않아 확인할 수 없습니다.</p>
+      </div>
       <div id="editorPanel" class="panel hidden">
         <div class="panel-head">
           <h2 class="section-title">관리자 페이지 · 새 문제 만들기</h2>
@@ -398,6 +410,9 @@
   const problemsRef = collection(db, "problems");
   // 푼 문제 기록: 문서 id를 `${uid}_${problemId}`로 만들어 한 사람이 한 문제를 한 번만 체크하게 합니다.
   const solvesRef = collection(db, "solves");
+  // 회원 목록(관리자 전용). 문서 id는 로그인 계정의 uid이고, 아이디와 가입 시각만 저장합니다.
+  const membersRef = collection(db, "members");
+  let unsubscribeMembers = null;
   const solveDoc = (uid, problemId) => doc(db, "solves", `${uid}_${problemId}`);
   let problemsReady = false; // 문제 목록을 한 번이라도 받았는지 (로딩 중에 빈 목록을 그리지 않으려고)
 
@@ -594,6 +609,7 @@
     $("logoutBtn").classList.toggle("hidden", !loggedIn);
     $("navCreate").classList.toggle("hidden", !loggedInAdmin);
     $("editorPanel").classList.toggle("hidden", !loggedInAdmin);
+    $("memberPanel").classList.toggle("hidden", !loggedInAdmin);
     if (!loggedInAdmin && !$("listScreen").classList.contains("hidden")) {
       $("navCreate").classList.remove("active");
     }
@@ -1165,12 +1181,11 @@
         </div>`
       : "";
     return `
-      <article class="problem-card${state.isAdmin ? " has-edit" : ""}" data-id="${id}" tabindex="0" role="button" aria-label="${escapeHtml(p.name)} 상세 보기">
-        <div class="problem-name">${escapeHtml(p.name || "이름 없는 문제")}${solvedBadge}</div>
+      <article class="problem-card" data-id="${id}" tabindex="0" role="button" aria-label="${escapeHtml(p.name)} 상세 보기">
+        <div class="problem-name">${escapeHtml(p.name || "이름 없는 문제")}${solvedBadge}${editButton}</div>
         <div class="grade">${escapeHtml(p.grade || "-")}</div>
         <div class="problem-meta">${typeName(p.type)} · 홀드 ${(p.holds || []).length}개${escapeHtml(setterAndDate(p))}</div>
         ${feel ? `<div class="feel-grade">사용자 체감 ${escapeHtml(feel.grade)} (${feel.count}/${feel.total})</div>` : ""}
-        ${editButton}
         ${actions}
       </article>`;
   }
@@ -1607,12 +1622,41 @@
     if (isFullOpen()) { fitFullWall(); setZoom(zoom.scale); }
   });
 
+  // 회원이 로그인하면 목록용 기록(아이디, 가입 시각)을 한 번 만듭니다. 이미 있으면 그대로 둡니다.
+  function ensureMemberRecord(user) {
+    if (!user || state.isAdmin) return;
+    const ref = doc(db, "members", user.uid);
+    getDoc(ref)
+      .then(snap => (snap.exists() ? null : setDoc(ref, { id: accountIdOf(user), createdAt: serverTimestamp() })))
+      .catch(error => console.error(error));
+  }
+  // 관리자 화면에서만 회원 목록을 실시간으로 구독합니다.
+  function watchMembers() {
+    if (unsubscribeMembers) { unsubscribeMembers(); unsubscribeMembers = null; }
+    if (!state.isAdmin) return;
+    unsubscribeMembers = onSnapshot(query(membersRef, orderBy("createdAt", "asc")), snapshot => {
+      const members = snapshot.docs.map(d => d.data());
+      $("memberCount").textContent = `총 ${members.length}명`;
+      $("memberList").innerHTML = members.length
+        ? members.map(m => {
+            const joined = m.createdAt && m.createdAt.toDate ? m.createdAt.toDate().toLocaleDateString("ko-KR") : "";
+            return `<li><strong>${escapeHtml(m.id || "")}</strong><span>${escapeHtml(joined)}</span></li>`;
+          }).join("")
+        : `<li class="small">아직 기록된 회원이 없습니다.</li>`;
+    }, error => {
+      console.error(error);
+      $("memberList").innerHTML = `<li class="small">회원 목록을 불러오지 못했습니다. Firestore 규칙을 확인해 주세요.</li>`;
+    });
+  }
+
   // ───────── 시작 ─────────
   onAuthStateChanged(auth, user => {
     state.user = user;
     state.isAdmin = Boolean(user && (user.email || "").toLowerCase() === ADMIN_EMAIL);
     renderAuth();
     watchSolves(user ? user.uid : "");
+    ensureMemberRecord(user);
+    watchMembers();
     if (!state.isAdmin) { state.wallStored = ""; switchScreen("list"); }
     else loadWallPhoto();
   });
